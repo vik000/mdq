@@ -1,0 +1,7 @@
+# MDQ Unit Catalogue — 0.1.0-draft
+
+The following categories are required for an implementation claiming `calc` conformance: length, mass, area, volume, time, temperature, speed, energy, power, pressure, angle and digital information. Unit names and symbols are case-sensitive. Libraries MUST publish a versioned table of exact factors and affine offsets; conversions MUST be dimensionally checked. No HTTP access is required for physical units. Currency is a distinct typed dimension and requires host-supplied exchange-rate observations.
+
+Required representative symbols: `m`, `km`, `cm`, `mm`, `in`, `ft`, `yd`, `miles`; `kg`, `g`, `mg`, `lb`, `oz`; `m2`, `km2`, `ft2`, `acre`, `ha`; `L`, `mL`, `m3`, `gal_us`, `qt_us`; `s`, `min`, `h`, `day`; `degC`, `degF`, `K`; `m/s`, `km/h`, `mph`; `J`, `kJ`, `cal`, `kWh`; `W`, `kW`, `hp`; `Pa`, `kPa`, `bar`, `psi`; `rad`, `deg`; `bit`, `B`, `kB`, `MB`, `GB`, `KiB`, `MiB`, `GiB`.
+
+For 0.1, exact reference conversions include: `1 in = 0.0254 m`, `1 lb = 0.45359237 kg`, `1 mile = 1609.344 m`, `1 gal_us = 0.003785411784 m3`, `degC = (degF - 32) * 5 / 9`, `K = degC + 273.15`, `1 KiB = 1024 B`, `1 kB = 1000 B`. `C` and `F` MUST NOT denote temperature. Unknown aliases MUST be rejected rather than guessed. A complete canonical factors table is a release-blocking requirement before a claim of full unit-catalogue conformance; this draft establishes minimum names and reference relationships only.

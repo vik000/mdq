@@ -1,0 +1,82 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>MDQ 0.1 Syntax Cheatsheet</title><style>body{font:16px/1.55 system-ui,-apple-system,sans-serif;margin:0;background:#f6f7f9;color:#202936}header{background:#17273f;color:white;padding:40px max(24px,calc((100% - 1100px)/2))}h1{margin:0;font-size:2rem}header p{max-width:850px;color:#dbe7f7}.wrap{max-width:1100px;margin:28px auto;padding:0 22px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px}.card{background:white;border:1px solid #dce1e7;border-radius:12px;padding:20px;min-width:0}h2{font-size:1.08rem;margin:0 0 12px}pre{overflow:auto;background:#101d2e;color:#e6edf5;padding:14px;border-radius:8px;font:13px/1.5 ui-monospace,Consolas,monospace}code{font-family:ui-monospace,Consolas,monospace}table{border-collapse:collapse;width:100%;background:white}td,th{border:1px solid #dce1e7;padding:9px;text-align:left;vertical-align:top}.note{border-left:4px solid #526b95;padding:10px 16px;background:white;margin:22px 0}footer{color:#596578;font-size:.85rem;padding:25px 0}@media print{body{background:white}.card{break-inside:avoid}header{padding:18px;color:#111;background:white}header p{color:#333}}</style></head><body><header><h1>MDQ 0.1 — Syntax Cheatsheet</h1><p>Markdown authoring, references, calculations, sources and packages. Draft syntax; examples are illustrative. Normative requirements are in the specification.</p></header><main class="wrap"><div class="note"><strong>Reference behaviour:</strong> heading links select the first matching heading in the original source file. Imported assets retain their original relative paths. <strong>Calculations:</strong> pure arithmetic; reader-authorised HTTP resolution happens separately.</div><div class="grid"><section class="card"><h2>Documents and metadata</h2><pre>---
+variables:
+  price: 120
+  quantity: 4
+---
+# Report
+Total: {{calc.total}}</pre></section><section class="card"><h2>Imports, references and anchors</h2><pre>![[chapters/intro.md]]
+![[chapters/intro.md#Overview]]
+![[chapters/intro.md#^summary]]
+[[chapters/intro.md#Results|See results]]
+[[toc]]
+
+A paragraph. ^summary</pre></section><section class="card"><h2>Calculations: full example</h2><pre>```calc
+price = 120 EUR
+quantity = 4
+subtotal = price * quantity
+tax = subtotal * 21%
+total = subtotal + tax
+distance = 12 miles
+distance_km = distance to km
+temperature = 72 degF
+temperature_c = temperature to degC
+```
+
+Total: {{calc.total}}</pre></section><section class="card"><h2>Calculation grammar at a glance</h2><pre>name = expression
+operators: +  -  *  /
+unary: +x, -x
+percentage: 21%
+grouping: (2 + 3) * 4
+quantity: 12 miles, 72 degF
+conversion: value to km
+No: functions, strings, loops, ^, inline comments, live fetch</pre></section><section class="card"><h2>Conditionals and loops</h2><pre>:::if {var=&quot;flags.public&quot; equals=&quot;true&quot;}
+Visible content.
+:::
+
+:::for {each=&quot;items&quot; as=&quot;item&quot;}
+- {{item}}
+:::</pre></section><section class="card"><h2>Rich authoring</h2><pre>&gt; [!WARNING]
+&gt; Check this.
+
+==highlight==  [^note]
+
+[^note]: Footnote.
+
+$E = mc^2$
+
+```mermaid
+graph TD; A--&gt;B;
+```
+
+[@smith2024]</pre></section><section class="card"><h2>Details and columns</h2><pre>:::details {title=&quot;More information&quot;}
+Content here.
+:::
+
+:::columns
+::::column
+Left
+::::
+::::column
+Right
+::::
+:::</pre></section><section class="card"><h2>External source declaration</h2><pre>---
+variables:
+  apple_price:
+    type: number
+    unit: USD
+    source:
+      kind: http
+      url: https://example.invalid/price
+      method: GET
+      format: json
+      select: /price
+---</pre></section><section class="card"><h2>Security and packaging</h2><pre># Native .mdq: ZIP with manifest.yaml
+format: mdq
+version: &#x27;0.1&#x27;
+entrypoint: document.md
+features: [core, rich, calc]
+requirements:
+  network: optional
+  hosts: [api.example.org]
+# Requests do not grant permissions.
+# Network off unless reader explicitly authorises.</pre></section></div><h2>Key calculation rules</h2><table><tr><th>Topic</th><th>Rule</th></tr><tr><td>Variables</td><td>Local assignments and host/metadata inputs; no forward references; names case-sensitive</td></tr><tr><td>Precedence</td><td>Percentage → unary → multiplication/division → addition/subtraction → conversion</td></tr><tr><td>Units</td><td>Dimension checked; incompatible units fail; absolute temperatures are restricted</td></tr><tr><td>Currency</td><td>Requires an explicitly supplied dated exchange-rate observation; no automatic fetch</td></tr><tr><td>External sources</td><td>Declared in YAML; reader controls permission; optional library resolver is disabled by default</td></tr><tr><td>Unsupported</td><td>Function calls, general programming, implicit multiplication, exponentiation, inline comments</td></tr></table><footer>MDQ 0.1 draft — refer to spec/extended-markdown.md, spec/sources-and-permissions.md and spec/calculation-units.md for normative detail.</footer></main></body></html>

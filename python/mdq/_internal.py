@@ -44,3 +44,6 @@ calc_render = _i.calc_render
 
 # E2.1 frontmatter
 frontmatter_split = _i.frontmatter_split
+
+# E2.2 YAML loader
+yaml_load_strict = _i.yaml_load_strict

@@ -12,9 +12,10 @@ use mdq_core::fx;
 use mdq_core::diag::{Code, Diagnostic};
 use mdq_core::units;
 use mdq_core::version;
+use mdq_core::yaml;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyBool, PyDict, PyList, PyString};
 
 // Python-visible exception `mdq.MdqError` (attributes are set in `to_py_err`).
 pyo3::create_exception!(mdq, MdqError, PyException);
@@ -290,6 +291,50 @@ fn calc_eval<'py>(
         .collect()
 }
 
+// ---- YAML loader test hook (E2.2) ----
+
+fn yaml_to_py<'py>(
+    py: Python<'py>,
+    v: &yaml::Yaml,
+    decimal_cls: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    match v {
+        yaml::Yaml::Null => Ok(py.None().into_bound(py)),
+        yaml::Yaml::Bool(b) => Ok(PyBool::new(py, *b).to_owned().into_any()),
+        yaml::Yaml::Number(n) => decimal_cls.call1((n.as_str(),)),
+        yaml::Yaml::Str(s) => Ok(PyString::new(py, s).into_any()),
+        yaml::Yaml::Seq(items) => {
+            let list = PyList::empty(py);
+            for item in items {
+                list.append(yaml_to_py(py, item, decimal_cls)?)?;
+            }
+            Ok(list.into_any())
+        }
+        yaml::Yaml::Map(entries) => {
+            let dict = PyDict::new(py);
+            for (k, item) in entries {
+                dict.set_item(k.as_str(), yaml_to_py(py, item, decimal_cls)?)?;
+            }
+            Ok(dict.into_any())
+        }
+    }
+}
+
+/// `yaml_load_strict(text, mapping_only=True, first_line=1)`: null/bool/str/
+/// `decimal.Decimal`/list/dict (insertion-ordered).
+#[pyfunction]
+#[pyo3(signature = (text, mapping_only=true, first_line=1))]
+fn yaml_load_strict<'py>(
+    py: Python<'py>,
+    text: &str,
+    mapping_only: bool,
+    first_line: u32,
+) -> PyResult<Bound<'py, PyAny>> {
+    let v = wrap(py, yaml::load(text, mapping_only, first_line))?;
+    let decimal_cls = py.import("decimal")?.getattr("Decimal")?;
+    yaml_to_py(py, &v, &decimal_cls)
+}
+
 // ---- frontmatter test hook (E2.1) ----
 
 #[pyfunction]
@@ -420,6 +465,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(fx_select, &internal)?)?;
     internal.add_function(wrap_pyfunction!(calc_render, &internal)?)?;
     internal.add_function(wrap_pyfunction!(frontmatter_split, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(yaml_load_strict, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_canonical, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_combine, &internal)?)?;
     m.add_submodule(&internal)?;

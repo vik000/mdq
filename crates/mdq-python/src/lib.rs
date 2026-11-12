@@ -12,6 +12,7 @@ use mdq_core::fx;
 use mdq_core::meta;
 use mdq_core::diag::{Code, Diagnostic};
 use mdq_core::units;
+use mdq_core::utf8;
 use mdq_core::vars;
 use mdq_core::version;
 use mdq_core::yaml;
@@ -420,6 +421,13 @@ fn frontmatter_split<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, Py
     Ok(d)
 }
 
+// ---- UTF-8 decode test hook (E3.1) ----
+
+#[pyfunction]
+fn utf8_decode(py: Python<'_>, data: &[u8]) -> PyResult<String> {
+    wrap(py, utf8::decode(data))
+}
+
 // ---- variables test hooks (E2.4) ----
 
 fn py_to_yaml(py: Python<'_>, obj: &Bound<'_, PyAny>, depth: usize) -> PyResult<yaml::Yaml> {
@@ -612,6 +620,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(yaml_load_strict, &internal)?)?;
     internal.add_function(wrap_pyfunction!(meta_merge, &internal)?)?;
     internal.add_function(wrap_pyfunction!(meta_cascade, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(utf8_decode, &internal)?)?;
     internal.add_function(wrap_pyfunction!(var_format_scalar, &internal)?)?;
     internal.add_function(wrap_pyfunction!(md_escape_inline, &internal)?)?;
     internal.add_function(wrap_pyfunction!(interpolate, &internal)?)?;

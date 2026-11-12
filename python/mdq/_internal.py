@@ -40,3 +40,4 @@ dim_combine = _i.dim_combine
 # E1.6 FX observation selection
 fx_parse_instant = _i.fx_parse_instant
 fx_select = _i.fx_select
+calc_render = _i.calc_render

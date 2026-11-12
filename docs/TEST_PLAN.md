@@ -163,7 +163,7 @@ Order of delivery follows D3. Internal names are proposals; spec feature IDs in 
 - Property: shuffling observation order never changes the selection; adding an observation after the valuation never changes the result.
 
 **E1.7 Result rendering [F12]**
-`calc_render(result)`: dimensionless canonical decimal; quantity `<decimal> <unit>`; money `<decimal> <CUR>`; no thousands separators; `-0` → `0`; typed value preserved separately from display.
+`calc_render(result)`: dimensionless canonical decimal; quantity `<decimal> <unit>`; money `<decimal> <CUR>`; no thousands separators; `-0` → `0`; typed value preserved separately from display. Implemented as a `display` field on every `calc_eval` result plus `calc_render(result_dict)` (G21).
 
 ### Epic 2 — Metadata and variables [F03, F08]
 **Internal:** `frontmatter_split`, `yaml_load_strict`, `meta_merge`, `meta_cascade(files, doc)`, `var_format_scalar`, `md_escape_inline`, `interpolate(text, vars)`.
@@ -256,6 +256,7 @@ These need a decision in the normative spec before the matching fixtures are fro
 | G18 | Nesting limits so hostile input cannot overflow the stack. **Provisional:** at most 199 open parentheses/unary signs and an expression tree at most 500 deep (a chain of more than 500 operands), both `MDQ_RESOURCE_LIMIT`. Needs spec confirmation | E1.4 |
 | G19 | Quantity `+`/`-` converts the right operand to the left unit (rounded once) and then adds (rounded once), following the spec sentence literally. An exact single-rounding sum would differ in the last digit for `degF`, `km/h`, `psi`, `deg` | E1.5 |
 | G20 | FX policies (E1.6): malformed host data (bad rate/timestamp/currency, duplicate id, unknown field, bad pin key, `market` without `valuation`) is MDQ_SOURCE_INVALID and checked up front for every observation; a missing or tied observation is MDQ_SOURCE_UNRESOLVED; id wins over valuation; `market` is an exact-match requirement on the request; no inversion or triangulation; per-pair pins override the default valuation; `observations` provenance lists conversions on that line only (not chained through variables) | E1.6 |
+| G21 | Rendering (E1.7): display is `<canonical decimal>[ <unit symbol or CUR>]`, one space, never an exponent, separator or `-0`; the 28-digit rounding is already done by the evaluator (render never rounds); `calc_render` accepts a `calc_eval` result dict (extra keys ignored, `unit`/`currency` optional), re-canonicalises `value`, and rejects inconsistent type/unit/currency or unknown units/codes with MDQ_CALC_ERROR; wrong Python types raise TypeError, missing `type`/`value` KeyError | E1.7 |
 
 ## 7. Order of work and first step
 1. **Epic 0** scaffold (workspace, maturin, pytest harness, `PanicException` watchdog). Includes your environment check (`rustc`, `cargo`, `maturin`, `python`, `gh`, `claude` versions; Apple Silicon needs native arm64 Python).

@@ -6,6 +6,7 @@ use mdq_core::calc::lexer;
 use mdq_core::calc::parser::{self, Expr, ExprKind};
 use mdq_core::decimal;
 use mdq_core::dim;
+use mdq_core::calc::render;
 use mdq_core::fx;
 use mdq_core::diag::{Code, Diagnostic};
 use mdq_core::units;
@@ -276,6 +277,7 @@ fn calc_eval<'py>(
                     d.set_item("currency", currency.as_str())?;
                 }
             }
+            d.set_item("display", render::render_value(&r.value))?;
             let used = r
                 .observations
                 .iter()
@@ -285,6 +287,27 @@ fn calc_eval<'py>(
             Ok(d)
         })
         .collect()
+}
+
+// ---- render test hook (E1.7) ----
+
+/// `calc_render(result)`: display text of a result dict (`type`, `value`,
+/// `unit`, `currency`; other keys are ignored, so a `calc_eval` result works).
+#[pyfunction]
+fn calc_render(py: Python<'_>, result: &Bound<'_, PyDict>) -> PyResult<String> {
+    fn text(d: &Bound<'_, PyDict>, key: &str, required: bool) -> PyResult<Option<String>> {
+        match d.get_item(key)? {
+            Some(v) if v.is_none() => Ok(None),
+            Some(v) => Ok(Some(v.extract::<String>()?)),
+            None if required => Err(pyo3::exceptions::PyKeyError::new_err(key.to_string())),
+            None => Ok(None),
+        }
+    }
+    let kind = text(result, "type", true)?.unwrap_or_default();
+    let value = text(result, "value", true)?.unwrap_or_default();
+    let unit = text(result, "unit", false)?;
+    let currency = text(result, "currency", false)?;
+    wrap(py, render::render_parts(&kind, &value, unit.as_deref(), currency.as_deref()))
 }
 
 // ---- FX test hooks (E1.6) ----
@@ -380,6 +403,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(calc_eval, &internal)?)?;
     internal.add_function(wrap_pyfunction!(fx_parse_instant, &internal)?)?;
     internal.add_function(wrap_pyfunction!(fx_select, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(calc_render, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_canonical, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_combine, &internal)?)?;
     m.add_submodule(&internal)?;

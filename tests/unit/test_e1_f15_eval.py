@@ -64,9 +64,9 @@ def test_spec_example_block():
 def test_result_fields_and_positions():
     out = mi.calc_eval("# c\n\n  a = 2 km\nb = 3", first_line=5)
     assert out == [
-        {"name": "a", "line": 7, "col": 3, "type": "quantity", "value": "2", "unit": "km", "currency": None, "observations": []},
+        {"name": "a", "line": 7, "col": 3, "type": "quantity", "value": "2", "unit": "km", "currency": None, "display": "2 km", "observations": []},
         {"name": "b", "line": 8, "col": 1, "type": "decimal", "value": "3", "unit": None, "currency": None,
-         "observations": []},
+         "display": "3", "observations": []},
     ]
 
 

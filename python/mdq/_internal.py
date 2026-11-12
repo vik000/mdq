@@ -47,3 +47,7 @@ frontmatter_split = _i.frontmatter_split
 
 # E2.2 YAML loader
 yaml_load_strict = _i.yaml_load_strict
+
+# E2.3 metadata merge and cascade
+meta_merge = _i.meta_merge
+meta_cascade = _i.meta_cascade

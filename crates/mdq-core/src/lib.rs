@@ -7,6 +7,7 @@ pub mod diag;
 pub mod dim;
 pub mod frontmatter;
 pub mod fx;
+pub mod meta;
 pub mod units;
 pub mod version;
 pub mod yaml;

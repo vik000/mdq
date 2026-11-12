@@ -9,13 +9,14 @@ use mdq_core::dim;
 use mdq_core::calc::render;
 use mdq_core::frontmatter;
 use mdq_core::fx;
+use mdq_core::meta;
 use mdq_core::diag::{Code, Diagnostic};
 use mdq_core::units;
 use mdq_core::version;
 use mdq_core::yaml;
-use pyo3::exceptions::PyException;
+use pyo3::exceptions::{PyException, PyTypeError};
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyDict, PyList, PyString};
+use pyo3::types::{PyBool, PyDict, PyList, PyString, PyTuple};
 
 // Python-visible exception `mdq.MdqError` (attributes are set in `to_py_err`).
 pyo3::create_exception!(mdq, MdqError, PyException);
@@ -291,6 +292,75 @@ fn calc_eval<'py>(
         .collect()
 }
 
+// ---- metadata merge test hooks (E2.3) ----
+
+/// A layer is `(name, text)` or `(name, text, first_line)`.
+fn layer_from(obj: &Bound<'_, PyAny>) -> PyResult<meta::Layer> {
+    let t = obj.downcast::<PyTuple>()?;
+    let n = t.len();
+    if n != 2 && n != 3 {
+        return Err(PyTypeError::new_err("a layer is (name, text) or (name, text, first_line)"));
+    }
+    let name: String = t.get_item(0)?.extract()?;
+    let text: String = t.get_item(1)?.extract()?;
+    let first_line: u32 = if n == 3 { t.get_item(2)?.extract()? } else { 1 };
+    Ok(meta::Layer { name, text, first_line })
+}
+
+fn merged_to_py<'py>(py: Python<'py>, m: &meta::Merged) -> PyResult<Bound<'py, PyDict>> {
+    let decimal_cls = py.import("decimal")?.getattr("Decimal")?;
+    let d = PyDict::new(py);
+    d.set_item("value", yaml_to_py(py, &m.value, &decimal_cls)?)?;
+    let prov = PyDict::new(py);
+    for (pointer, layer) in &m.provenance {
+        prov.set_item(pointer.as_str(), layer.as_str())?;
+    }
+    d.set_item("provenance", prov)?;
+    Ok(d)
+}
+
+/// `meta_merge(layers)`: layers lowest precedence first.
+#[pyfunction]
+fn meta_merge<'py>(py: Python<'py>, layers: Vec<Bound<'py, PyAny>>) -> PyResult<Bound<'py, PyDict>> {
+    let parsed = layers.iter().map(|l| layer_from(l)).collect::<PyResult<Vec<_>>>()?;
+    let merged = wrap(py, meta::merge(&parsed))?;
+    merged_to_py(py, &merged)
+}
+
+/// `meta_cascade(defaults, project, directories, frontmatter, sidecar, overrides)`.
+#[pyfunction]
+#[pyo3(signature = (defaults=None, project=None, directories=None, frontmatter=None, sidecar=None, overrides=None))]
+fn meta_cascade<'py>(
+    py: Python<'py>,
+    defaults: Option<Bound<'py, PyAny>>,
+    project: Option<Bound<'py, PyAny>>,
+    directories: Option<Vec<Bound<'py, PyAny>>>,
+    frontmatter: Option<Bound<'py, PyAny>>,
+    sidecar: Option<Bound<'py, PyAny>>,
+    overrides: Option<Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let one = |o: &Option<Bound<'py, PyAny>>| -> PyResult<Option<meta::Layer>> {
+        match o {
+            Some(obj) => Ok(Some(layer_from(obj)?)),
+            None => Ok(None),
+        }
+    };
+    let c = meta::Cascade {
+        defaults: one(&defaults)?,
+        project: one(&project)?,
+        directories: directories
+            .unwrap_or_default()
+            .iter()
+            .map(|l| layer_from(l))
+            .collect::<PyResult<Vec<_>>>()?,
+        frontmatter: one(&frontmatter)?,
+        sidecar: one(&sidecar)?,
+        overrides: one(&overrides)?,
+    };
+    let merged = wrap(py, meta::cascade(&c))?;
+    merged_to_py(py, &merged)
+}
+
 // ---- YAML loader test hook (E2.2) ----
 
 fn yaml_to_py<'py>(
@@ -466,6 +536,8 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(calc_render, &internal)?)?;
     internal.add_function(wrap_pyfunction!(frontmatter_split, &internal)?)?;
     internal.add_function(wrap_pyfunction!(yaml_load_strict, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(meta_merge, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(meta_cascade, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_canonical, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_combine, &internal)?)?;
     m.add_submodule(&internal)?;

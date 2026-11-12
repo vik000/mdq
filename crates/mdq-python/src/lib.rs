@@ -6,6 +6,7 @@ use mdq_core::calc::lexer;
 use mdq_core::calc::parser::{self, Expr, ExprKind};
 use mdq_core::decimal;
 use mdq_core::dim;
+use mdq_core::fx;
 use mdq_core::diag::{Code, Diagnostic};
 use mdq_core::units;
 use mdq_core::version;
@@ -213,18 +214,45 @@ fn dim_combine(py: Python<'_>, a: &str, b: &str, divide: bool) -> PyResult<Strin
     wrap(py, dim::combine_str(a, b, divide))
 }
 
-/// `variables` maps names to calc literals such as "120 EUR".
+fn obs_dict<'py>(py: Python<'py>, o: &fx::Observation) -> PyResult<Bound<'py, PyDict>> {
+    let d = PyDict::new(py);
+    d.set_item("id", o.id.as_deref())?;
+    d.set_item("from", o.from.as_str())?;
+    d.set_item("to", o.to.as_str())?;
+    d.set_item("rate", o.rate.to_canonical())?;
+    d.set_item("observed_at", o.observed_at.as_str())?;
+    d.set_item("provider", o.provider.as_str())?;
+    d.set_item("market", o.market.as_deref())?;
+    Ok(d)
+}
+
+/// `variables` maps names to calc literals such as "120 EUR". The FX
+/// arguments describe host-supplied exchange-rate observations (E1.6).
 #[pyfunction]
-#[pyo3(signature = (text, variables=None, first_line=1))]
+#[pyo3(signature = (text, variables=None, first_line=1, observations=None, valuation=None, market=None, pins=None))]
+#[allow(clippy::too_many_arguments)]
 fn calc_eval<'py>(
     py: Python<'py>,
     text: &str,
     variables: Option<std::collections::HashMap<String, String>>,
     first_line: u32,
+    observations: Option<Vec<std::collections::HashMap<String, String>>>,
+    valuation: Option<String>,
+    market: Option<String>,
+    pins: Option<std::collections::HashMap<String, std::collections::HashMap<String, String>>>,
 ) -> PyResult<Vec<Bound<'py, PyDict>>> {
     let pairs: Vec<(String, String)> = variables.unwrap_or_default().into_iter().collect();
     let host = wrap(py, eval::parse_host_values(&pairs))?;
-    let results = wrap(py, eval::evaluate_source(text, first_line, &host))?;
+    let ctx = wrap(
+        py,
+        fx::FxContext::from_parts(
+            &observations.unwrap_or_default(),
+            valuation.as_deref(),
+            market.as_deref(),
+            &pins.unwrap_or_default(),
+        ),
+    )?;
+    let results = wrap(py, eval::evaluate_source(text, first_line, &host, &ctx))?;
     results
         .iter()
         .map(|r| {
@@ -248,9 +276,41 @@ fn calc_eval<'py>(
                     d.set_item("currency", currency.as_str())?;
                 }
             }
+            let used = r
+                .observations
+                .iter()
+                .map(|o| obs_dict(py, o))
+                .collect::<PyResult<Vec<_>>>()?;
+            d.set_item("observations", used)?;
             Ok(d)
         })
         .collect()
+}
+
+// ---- FX test hooks (E1.6) ----
+
+#[pyfunction]
+fn fx_parse_instant(py: Python<'_>, s: &str) -> PyResult<(i64, u32)> {
+    let i = wrap(py, fx::Instant::parse(s))?;
+    Ok((i.secs, i.nanos))
+}
+
+#[pyfunction]
+#[pyo3(signature = (observations, from_currency, to_currency, valuation=None, id=None, market=None))]
+fn fx_select<'py>(
+    py: Python<'py>,
+    observations: Vec<std::collections::HashMap<String, String>>,
+    from_currency: &str,
+    to_currency: &str,
+    valuation: Option<&str>,
+    id: Option<&str>,
+    market: Option<&str>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let obs = wrap(
+        py,
+        fx::select_from_parts(&observations, from_currency, to_currency, valuation, id, market),
+    )?;
+    obs_dict(py, &obs)
 }
 
 /// Public: `mdq.version_info()`.
@@ -318,6 +378,8 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(calc_tokenize, &internal)?)?;
     internal.add_function(wrap_pyfunction!(calc_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(calc_eval, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(fx_parse_instant, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(fx_select, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_canonical, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_combine, &internal)?)?;
     m.add_submodule(&internal)?;

@@ -13,17 +13,19 @@
 //!   and absolute temperatures in any product or sum, are errors;
 //! * G2: derived result units follow calculation-units.md section 6;
 //!   `number / quantity` is always an error (no catalogue unit has an inverse dimension);
-//! * G16: any well-formed currency code is accepted; `money to OTHER` fails
-//!   with MDQ_SOURCE_UNRESOLVED until observations exist (E1.6);
+//! * G16: any well-formed currency code is accepted; `money to OTHER` uses
+//!   the host's observations (`fx.rs`, E1.6): `amount * rate`, never inverted;
 //! * adding quantities converts the right operand to the left unit first
 //!   (spec 8.7), so that step and the addition each round once.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use crate::calc::parser::{self, Assignment, BinOp, Expr, ExprKind, UnOp};
 use crate::decimal::Decimal;
 use crate::diag::{Code, Diagnostic};
 use crate::dim::Dim;
+use crate::fx::{FxContext, Observation};
 use crate::units::{self, Kind, Unit};
 
 type Res<T> = Result<T, Diagnostic>;
@@ -68,6 +70,8 @@ pub struct EvalResult {
     pub line: u32,
     pub col: u32,
     pub value: Value,
+    /// Observations applied by `to` conversions on THIS line (provenance).
+    pub observations: Vec<Observation>,
 }
 
 fn cerr(message: impl Into<String>, line: u32, col: u32) -> Diagnostic {
@@ -90,6 +94,8 @@ fn dim_of(u: &Unit) -> Res<Dim> {
 struct Scope<'a> {
     locals: HashMap<String, Value>,
     host: &'a HashMap<String, Value>,
+    fx: &'a FxContext,
+    used: RefCell<Vec<Observation>>,
     /// Every name assigned in the block, with its line (for "used before assigned").
     later: HashMap<String, u32>,
 }
@@ -148,7 +154,7 @@ impl<'a> Scope<'a> {
             }
             ExprKind::Convert { operand, unit, currency } => {
                 let v = self.eval(operand)?;
-                convert(&v, unit, *currency, e.line, e.col)
+                convert(&v, unit, *currency, e.line, e.col, self.fx, &self.used)
             }
         }
     }
@@ -370,18 +376,25 @@ fn derived_unit(ua: &Unit, ub: &Unit, divide: bool, dim: &Dim) -> Res<&'static U
     ))
 }
 
-fn convert(v: &Value, target: &str, currency: bool, line: u32, col: u32) -> Res<Value> {
+fn convert(
+    v: &Value,
+    target: &str,
+    currency: bool,
+    line: u32,
+    col: u32,
+    fx: &FxContext,
+    used: &RefCell<Vec<Observation>>,
+) -> Res<Value> {
     if currency {
         return match v {
             Value::Money { value, currency: from } => {
                 if from == target {
                     Ok(Value::Money { value: value.clone(), currency: from.clone() })
                 } else {
-                    Err(Diagnostic::new(
-                        Code::SourceUnresolved,
-                        format!("no exchange-rate observation supplied to convert {from} to {target}"),
-                    )
-                    .at_position(line, col))
+                    let obs = fx.select(from, target).map_err(|d| at(d, line, col))?;
+                    let converted = value.mul(&obs.rate).map_err(|d| at(d, line, col))?;
+                    used.borrow_mut().push(obs.clone());
+                    Ok(Value::Money { value: converted, currency: target.to_string() })
                 }
             }
             other => Err(cerr(format!("cannot convert {} to {target}", other.describe()), line, col)),
@@ -407,25 +420,32 @@ fn convert(v: &Value, target: &str, currency: bool, line: u32, col: u32) -> Res<
 
 /// Evaluate parsed assignments in order. `host` holds typed inputs that are
 /// visible as simple identifiers; an earlier local assignment shadows them.
-pub fn evaluate(block: &[Assignment], host: &HashMap<String, Value>) -> Res<Vec<EvalResult>> {
+pub fn evaluate(block: &[Assignment], host: &HashMap<String, Value>, fx: &FxContext) -> Res<Vec<EvalResult>> {
     let mut later: HashMap<String, u32> = HashMap::new();
     for a in block {
         later.insert(a.name.clone(), a.line);
     }
-    let mut scope = Scope { locals: HashMap::new(), host, later };
+    let mut scope = Scope { locals: HashMap::new(), host, fx, used: RefCell::new(Vec::new()), later };
     let mut out = Vec::new();
     for a in block {
+        scope.used.borrow_mut().clear();
         let value = scope.eval(&a.expr)?;
         scope.locals.insert(a.name.clone(), value.clone());
-        out.push(EvalResult { name: a.name.clone(), line: a.line, col: a.col, value });
+        let observations = scope.used.borrow().clone();
+        out.push(EvalResult { name: a.name.clone(), line: a.line, col: a.col, value, observations });
     }
     Ok(out)
 }
 
 /// Lex, parse and evaluate a whole `calc` block.
-pub fn evaluate_source(text: &str, first_line: u32, host: &HashMap<String, Value>) -> Res<Vec<EvalResult>> {
+pub fn evaluate_source(
+    text: &str,
+    first_line: u32,
+    host: &HashMap<String, Value>,
+    fx: &FxContext,
+) -> Res<Vec<EvalResult>> {
     let block = parser::parse_source(text, first_line)?;
-    evaluate(&block, host)
+    evaluate(&block, host, fx)
 }
 
 fn is_literal(e: &Expr) -> bool {
@@ -444,6 +464,7 @@ pub fn parse_host_values(pairs: &[(String, String)]) -> Res<HashMap<String, Valu
     sorted.sort(); // deterministic: the first bad variable (by name) is reported
     let mut out = HashMap::new();
     let empty: HashMap<String, Value> = HashMap::new();
+    let no_fx = FxContext::empty();
     for (name, text) in sorted {
         let valid_name = name.chars().next().map_or(false, |c| c.is_ascii_alphabetic())
             && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
@@ -461,7 +482,13 @@ pub fn parse_host_values(pairs: &[(String, String)]) -> Res<HashMap<String, Valu
                 format!("invalid value for variable `{name}`: expected a number, quantity or money literal"),
             ));
         }
-        let scope = Scope { locals: HashMap::new(), host: &empty, later: HashMap::new() };
+        let scope = Scope {
+            locals: HashMap::new(),
+            host: &empty,
+            fx: &no_fx,
+            used: RefCell::new(Vec::new()),
+            later: HashMap::new(),
+        };
         let value = scope.eval(&block[0].expr).map_err(wrap)?;
         out.insert(name.clone(), value);
     }

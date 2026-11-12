@@ -36,3 +36,7 @@ calc_parse = _i.calc_parse
 calc_eval = _i.calc_eval
 dim_canonical = _i.dim_canonical
 dim_combine = _i.dim_combine
+
+# E1.6 FX observation selection
+fx_parse_instant = _i.fx_parse_instant
+fx_select = _i.fx_select

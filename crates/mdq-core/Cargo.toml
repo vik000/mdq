@@ -1,0 +1,10 @@
+[package]
+name = "mdq-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "MDQ core: pure Rust logic, no Python or network dependencies"
+
+[dependencies]
+num-bigint = "0.4"
+num-traits = "0.2"

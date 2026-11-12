@@ -1,0 +1,59 @@
+# MDQ unit catalogue 0.1.0-draft (normative data for spec/calculation-units.md)
+# value_in_base = (value + offset) * scale ; value_in_unit = value_in_base / scale - offset
+# scale/offset are exact: a decimal, or a fraction of two decimals 'n/d'.
+symbol	name	category	dimension	scale	offset	base_unit	kind	definition
+m	metre	length	L1	1	0	m	linear	SI base unit
+km	kilometre	length	L1	1000	0	m	linear	1000 m
+cm	centimetre	length	L1	0.01	0	m	linear	0.01 m
+mm	millimetre	length	L1	0.001	0	m	linear	0.001 m
+in	inch	length	L1	0.0254	0	m	linear	international inch, exactly 0.0254 m
+ft	foot	length	L1	0.3048	0	m	linear	12 in
+yd	yard	length	L1	0.9144	0	m	linear	3 ft
+miles	statute mile	length	L1	1609.344	0	m	linear	1760 yd (the symbol is the plural `miles`)
+kg	kilogram	mass	M1	1	0	kg	linear	SI base unit
+g	gram	mass	M1	0.001	0	kg	linear	0.001 kg
+mg	milligram	mass	M1	0.000001	0	kg	linear	0.000001 kg
+lb	pound	mass	M1	0.45359237	0	kg	linear	avoirdupois pound, exactly 0.45359237 kg
+oz	ounce	mass	M1	0.028349523125	0	kg	linear	1/16 lb
+m2	square metre	area	L2	1	0	m2	linear	SI coherent unit
+km2	square kilometre	area	L2	1000000	0	m2	linear	(1000 m)^2
+ft2	square foot	area	L2	0.09290304	0	m2	linear	(0.3048 m)^2
+acre	acre	area	L2	4046.8564224	0	m2	linear	international acre, 43560 ft2
+ha	hectare	area	L2	10000	0	m2	linear	10000 m2
+m3	cubic metre	volume	L3	1	0	m3	linear	SI coherent unit
+L	litre	volume	L3	0.001	0	m3	linear	0.001 m3 (upper-case L only)
+mL	millilitre	volume	L3	0.000001	0	m3	linear	0.000001 m3
+gal_us	US liquid gallon	volume	L3	0.003785411784	0	m3	linear	231 in3, exactly 0.003785411784 m3
+qt_us	US liquid quart	volume	L3	0.000946352946	0	m3	linear	1/4 gal_us
+s	second	time	T1	1	0	s	linear	SI base unit
+min	minute	time	T1	60	0	s	linear	60 s
+h	hour	time	T1	3600	0	s	linear	3600 s
+day	day	time	T1	86400	0	s	linear	exactly 86400 s (not a calendar day)
+K	kelvin	temperature	Th1	1	0	K	absolute_temperature	SI base unit
+degC	degree Celsius	temperature	Th1	1	273.15	K	absolute_temperature	K = degC + 273.15
+degF	degree Fahrenheit	temperature	Th1	5/9	459.67	K	absolute_temperature	degC = (degF - 32) * 5 / 9
+deltaK	kelvin difference	temperature	dTh1	1	0	deltaK	difference	RESULT-ONLY: difference of two absolute temperatures
+m/s	metre per second	speed	L1*T-1	1	0	m/s	linear	SI coherent unit
+km/h	kilometre per hour	speed	L1*T-1	5/18	0	m/s	linear	1000 m / 3600 s
+mph	mile per hour	speed	L1*T-1	0.44704	0	m/s	linear	1 miles / 1 h
+J	joule	energy	M1*L2*T-2	1	0	J	linear	SI coherent unit
+kJ	kilojoule	energy	M1*L2*T-2	1000	0	J	linear	1000 J
+cal	thermochemical calorie	energy	M1*L2*T-2	4.184	0	J	linear	exactly 4.184 J (not the kilocalorie)
+kWh	kilowatt hour	energy	M1*L2*T-2	3600000	0	J	linear	1000 W * 3600 s
+W	watt	power	M1*L2*T-3	1	0	W	linear	SI coherent unit
+kW	kilowatt	power	M1*L2*T-3	1000	0	W	linear	1000 W
+hp	mechanical horsepower	power	M1*L2*T-3	745.69987158227022	0	W	linear	550 ft*lbf/s, lbf = 0.45359237 kg * 9.80665 m/s2
+Pa	pascal	pressure	M1*L-1*T-2	1	0	Pa	linear	SI coherent unit
+kPa	kilopascal	pressure	M1*L-1*T-2	1000	0	Pa	linear	1000 Pa
+bar	bar	pressure	M1*L-1*T-2	100000	0	Pa	linear	100000 Pa
+psi	pound-force per square inch	pressure	M1*L-1*T-2	4.4482216152605/0.00064516	0	Pa	linear	lbf / in2 (not a finite decimal)
+rad	radian	angle	A1	1	0	rad	linear	SI coherent unit
+deg	degree of arc	angle	A1	3.1415926535897932384626433832795028841972/180	0	rad	linear	PI / 180 using the constant PI below
+bit	bit	information	I1	1	0	bit	linear	base unit
+B	byte	information	I1	8	0	bit	linear	8 bit
+kB	kilobyte	information	I1	8000	0	bit	linear	1000 B
+MB	megabyte	information	I1	8000000	0	bit	linear	1000^2 B
+GB	gigabyte	information	I1	8000000000	0	bit	linear	1000^3 B
+KiB	kibibyte	information	I1	8192	0	bit	linear	1024 B
+MiB	mebibyte	information	I1	8388608	0	bit	linear	1024^2 B
+GiB	gibibyte	information	I1	8589934592	0	bit	linear	1024^3 B

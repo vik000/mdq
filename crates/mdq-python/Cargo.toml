@@ -1,0 +1,14 @@
+[package]
+name = "mdq-python"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "PyO3 bindings for mdq-core (wrappers only, no logic)"
+
+[lib]
+name = "_native"
+crate-type = ["cdylib"]
+
+[dependencies]
+mdq-core = { path = "../mdq-core" }
+pyo3 = { version = "0.23", features = ["abi3-py39"] }

@@ -5,6 +5,7 @@ pub mod calc;
 pub mod decimal;
 pub mod diag;
 pub mod dim;
+pub mod frontmatter;
 pub mod fx;
 pub mod units;
 pub mod version;

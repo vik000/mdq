@@ -41,3 +41,6 @@ dim_combine = _i.dim_combine
 fx_parse_instant = _i.fx_parse_instant
 fx_select = _i.fx_select
 calc_render = _i.calc_render
+
+# E2.1 frontmatter
+frontmatter_split = _i.frontmatter_split

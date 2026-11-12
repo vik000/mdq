@@ -7,6 +7,7 @@ use mdq_core::calc::parser::{self, Expr, ExprKind};
 use mdq_core::decimal;
 use mdq_core::dim;
 use mdq_core::calc::render;
+use mdq_core::frontmatter;
 use mdq_core::fx;
 use mdq_core::diag::{Code, Diagnostic};
 use mdq_core::units;
@@ -289,6 +290,20 @@ fn calc_eval<'py>(
         .collect()
 }
 
+// ---- frontmatter test hook (E2.1) ----
+
+#[pyfunction]
+fn frontmatter_split<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyDict>> {
+    let s = wrap(py, frontmatter::split(text))?;
+    let d = PyDict::new(py);
+    d.set_item("has_frontmatter", s.frontmatter.is_some())?;
+    d.set_item("frontmatter", s.frontmatter)?;
+    d.set_item("frontmatter_line", s.frontmatter_line)?;
+    d.set_item("body", s.body)?;
+    d.set_item("body_line", s.body_line)?;
+    Ok(d)
+}
+
 // ---- render test hook (E1.7) ----
 
 /// `calc_render(result)`: display text of a result dict (`type`, `value`,
@@ -404,6 +419,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(fx_parse_instant, &internal)?)?;
     internal.add_function(wrap_pyfunction!(fx_select, &internal)?)?;
     internal.add_function(wrap_pyfunction!(calc_render, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(frontmatter_split, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_canonical, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_combine, &internal)?)?;
     m.add_submodule(&internal)?;

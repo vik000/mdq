@@ -9,5 +9,6 @@ pub mod frontmatter;
 pub mod fx;
 pub mod meta;
 pub mod units;
+pub mod vars;
 pub mod version;
 pub mod yaml;

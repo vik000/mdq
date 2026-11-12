@@ -51,3 +51,8 @@ yaml_load_strict = _i.yaml_load_strict
 # E2.3 metadata merge and cascade
 meta_merge = _i.meta_merge
 meta_cascade = _i.meta_cascade
+
+# E2.4 variables and escaping
+var_format_scalar = _i.var_format_scalar
+md_escape_inline = _i.md_escape_inline
+interpolate = _i.interpolate

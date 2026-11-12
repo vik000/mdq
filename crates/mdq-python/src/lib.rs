@@ -12,11 +12,12 @@ use mdq_core::fx;
 use mdq_core::meta;
 use mdq_core::diag::{Code, Diagnostic};
 use mdq_core::units;
+use mdq_core::vars;
 use mdq_core::version;
 use mdq_core::yaml;
 use pyo3::exceptions::{PyException, PyTypeError};
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyDict, PyList, PyString, PyTuple};
+use pyo3::types::{PyBool, PyDict, PyInt, PyList, PyString, PyTuple};
 
 // Python-visible exception `mdq.MdqError` (attributes are set in `to_py_err`).
 pyo3::create_exception!(mdq, MdqError, PyException);
@@ -419,6 +420,79 @@ fn frontmatter_split<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, Py
     Ok(d)
 }
 
+// ---- variables test hooks (E2.4) ----
+
+fn py_to_yaml(py: Python<'_>, obj: &Bound<'_, PyAny>, depth: usize) -> PyResult<yaml::Yaml> {
+    if depth > 64 {
+        return Err(PyTypeError::new_err("variables are nested too deeply"));
+    }
+    if obj.is_none() {
+        return Ok(yaml::Yaml::Null);
+    }
+    if let Ok(b) = obj.downcast::<PyBool>() {
+        return Ok(yaml::Yaml::Bool(b.is_true()));
+    }
+    if obj.downcast::<PyString>().is_ok() {
+        return Ok(yaml::Yaml::Str(obj.extract::<String>()?));
+    }
+    if obj.downcast::<PyInt>().is_ok() {
+        return Ok(yaml::Yaml::Number(obj.str()?.extract::<String>()?));
+    }
+    let decimal_cls = py.import("decimal")?.getattr("Decimal")?;
+    if obj.is_instance(&decimal_cls)? {
+        return Ok(yaml::Yaml::Number(obj.str()?.extract::<String>()?));
+    }
+    if let Ok(list) = obj.downcast::<PyList>() {
+        let mut items = Vec::new();
+        for item in list.iter() {
+            items.push(py_to_yaml(py, &item, depth + 1)?);
+        }
+        return Ok(yaml::Yaml::Seq(items));
+    }
+    if let Ok(tuple) = obj.downcast::<PyTuple>() {
+        let mut items = Vec::new();
+        for item in tuple.iter() {
+            items.push(py_to_yaml(py, &item, depth + 1)?);
+        }
+        return Ok(yaml::Yaml::Seq(items));
+    }
+    if let Ok(dict) = obj.downcast::<PyDict>() {
+        let mut entries = Vec::new();
+        for (k, v) in dict.iter() {
+            let key: String = k
+                .extract()
+                .map_err(|_| PyTypeError::new_err("variable names must be str"))?;
+            entries.push((key, py_to_yaml(py, &v, depth + 1)?));
+        }
+        return Ok(yaml::Yaml::Map(entries));
+    }
+    Err(PyTypeError::new_err(
+        "variables must be None, bool, int, decimal.Decimal, str, list or dict (float is not accepted)",
+    ))
+}
+
+#[pyfunction]
+fn var_format_scalar(py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<String> {
+    let y = py_to_yaml(py, value, 0)?;
+    wrap(py, vars::format_scalar(&y))
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, at_line_start=true))]
+fn md_escape_inline(py: Python<'_>, text: &str, at_line_start: bool) -> PyResult<String> {
+    wrap(py, vars::escape_inline(text, at_line_start))
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, variables, first_line=1))]
+fn interpolate(py: Python<'_>, text: &str, variables: &Bound<'_, PyAny>, first_line: u32) -> PyResult<String> {
+    if !variables.is_instance_of::<PyDict>() {
+        return Err(PyTypeError::new_err("variables must be a dict"));
+    }
+    let y = py_to_yaml(py, variables, 0)?;
+    wrap(py, vars::interpolate(text, &y, first_line))
+}
+
 // ---- render test hook (E1.7) ----
 
 /// `calc_render(result)`: display text of a result dict (`type`, `value`,
@@ -538,6 +612,9 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(yaml_load_strict, &internal)?)?;
     internal.add_function(wrap_pyfunction!(meta_merge, &internal)?)?;
     internal.add_function(wrap_pyfunction!(meta_cascade, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(var_format_scalar, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(md_escape_inline, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(interpolate, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_canonical, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_combine, &internal)?)?;
     m.add_submodule(&internal)?;

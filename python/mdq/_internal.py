@@ -78,3 +78,7 @@ heading_match = _i.heading_match
 slugify = _i.slugify
 slug_dedupe = _i.slug_dedupe
 percent_encode_anchor = _i.percent_encode_anchor
+
+# E4.3 document index and references
+doc_index = _i.doc_index
+resolve_ref = _i.resolve_ref

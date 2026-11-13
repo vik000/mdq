@@ -13,6 +13,7 @@ pub mod fx;
 pub mod headings;
 pub mod meta;
 pub mod paths;
+pub mod refs;
 pub mod unitab;
 pub mod units;
 pub mod utf8;

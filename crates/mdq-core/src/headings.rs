@@ -489,7 +489,7 @@ fn strip_inline(s: &str) -> String {
     out
 }
 
-fn collapse_ws(s: &str) -> String {
+pub(crate) fn collapse_ws(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut pend = false;
     for ch in s.chars() {
@@ -506,7 +506,7 @@ fn collapse_ws(s: &str) -> String {
     out
 }
 
-fn atx_strip(s: &str) -> String {
+pub(crate) fn atx_strip(s: &str) -> String {
     let blank = |c: char| c == ' ' || c == '\t';
     let t = s.trim_end_matches(blank);
     let body = t.trim_end_matches('#');

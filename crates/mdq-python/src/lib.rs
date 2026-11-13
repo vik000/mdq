@@ -11,6 +11,7 @@ use mdq_core::calc::render;
 use mdq_core::frontmatter;
 use mdq_core::fx;
 use mdq_core::headings;
+use mdq_core::refs;
 use mdq_core::meta;
 use mdq_core::paths;
 use mdq_core::diag::{Code, Diagnostic};
@@ -582,6 +583,59 @@ fn percent_encode_anchor(text: &str) -> String {
     headings::percent_encode_anchor(text)
 }
 
+fn heading_dict<'py>(py: Python<'py>, h: &refs::Heading) -> PyResult<Bound<'py, PyDict>> {
+    let d = PyDict::new(py);
+    d.set_item("ordinal", h.ordinal)?;
+    d.set_item("level", h.level)?;
+    d.set_item("text", &h.text)?;
+    d.set_item("id", h.id.as_deref())?;
+    d.set_item("start_line", h.start_line)?;
+    d.set_item("end_line", h.end_line)?;
+    d.set_item("section_end", h.section_end)?;
+    Ok(d)
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, first_line=1))]
+fn doc_index<'py>(py: Python<'py>, text: &str, first_line: u32) -> PyResult<Bound<'py, PyDict>> {
+    let (headings, blocks) = wrap(py, refs::doc_index(text, first_line))?;
+    let hs = PyList::empty(py);
+    for h in &headings {
+        hs.append(heading_dict(py, h)?)?;
+    }
+    let bs = PyList::empty(py);
+    for b in &blocks {
+        let d = PyDict::new(py);
+        d.set_item("id", &b.id)?;
+        d.set_item("kind", b.kind)?;
+        d.set_item("start_line", b.start_line)?;
+        d.set_item("end_line", b.end_line)?;
+        bs.append(d)?;
+    }
+    let out = PyDict::new(py);
+    out.set_item("headings", hs)?;
+    out.set_item("blocks", bs)?;
+    Ok(out)
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, fragment, first_line=1))]
+fn resolve_ref<'py>(py: Python<'py>, text: &str, fragment: &str, first_line: u32) -> PyResult<Bound<'py, PyDict>> {
+    let r = wrap(py, refs::resolve_ref(text, fragment, first_line))?;
+    let d = PyDict::new(py);
+    d.set_item("kind", r.kind)?;
+    d.set_item("start_line", r.start_line)?;
+    d.set_item("end_line", r.end_line)?;
+    d.set_item("id", r.id.as_deref())?;
+    if let Some(h) = &r.heading {
+        d.set_item("ordinal", h.ordinal)?;
+        d.set_item("level", h.level)?;
+        d.set_item("text", &h.text)?;
+        d.set_item("section_end", h.section_end)?;
+    }
+    Ok(d)
+}
+
 fn attrs_dict<'py>(py: Python<'py>, attrs: Vec<(String, String)>) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
     for (k, v) in attrs {
@@ -780,6 +834,8 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(slugify, &internal)?)?;
     internal.add_function(wrap_pyfunction!(slug_dedupe, &internal)?)?;
     internal.add_function(wrap_pyfunction!(percent_encode_anchor, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(doc_index, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(resolve_ref, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_canonical, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_combine, &internal)?)?;
     m.add_submodule(&internal)?;

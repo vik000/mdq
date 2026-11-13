@@ -18,6 +18,7 @@ use mdq_core::cite;
 use mdq_core::notes;
 use mdq_core::refs;
 use mdq_core::rich;
+use mdq_core::source;
 use mdq_core::meta;
 use mdq_core::paths;
 use mdq_core::diag::{Code, Diagnostic};
@@ -819,6 +820,61 @@ fn export_markdown(
     wrap(py, export::export_markdown(text, profile, &v, first_line))
 }
 
+fn source_dict<'py>(py: Python<'py>, s: source::Source) -> PyResult<Bound<'py, PyDict>> {
+    let d = PyDict::new(py);
+    d.set_item("kind", s.kind)?;
+    d.set_item("reader", s.reader)?;
+    d.set_item("url", s.url)?;
+    d.set_item("method", s.method)?;
+    d.set_item("format", s.format)?;
+    d.set_item("select", s.select)?;
+    d.set_item("arguments", attrs_dict(py, s.arguments)?)?;
+    d.set_item("named", s.named)?;
+    Ok(d)
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, first_line=1))]
+fn source_validate<'py>(py: Python<'py>, text: &str, first_line: u32) -> PyResult<Bound<'py, PyList>> {
+    let decls = wrap(py, source::source_validate(text, first_line))?;
+    let list = PyList::empty(py);
+    for v in decls {
+        let d = PyDict::new(py);
+        d.set_item("name", v.name)?;
+        d.set_item("type", v.vtype)?;
+        d.set_item("unit", v.unit)?;
+        match v.source {
+            Some(s) => d.set_item("source", source_dict(py, s)?)?,
+            None => d.set_item("source", py.None())?,
+        }
+        d.set_item("url", v.url)?;
+        list.append(d)?;
+    }
+    Ok(list)
+}
+
+#[pyfunction]
+fn url_template_expand(py: Python<'_>, template: &str, arguments: &Bound<'_, PyDict>) -> PyResult<String> {
+    let mut args: Vec<(String, String)> = Vec::new();
+    for (k, v) in arguments.iter() {
+        let key = k
+            .downcast::<PyString>()
+            .map_err(|_| PyTypeError::new_err("argument names must be str"))?
+            .to_string();
+        let val = if v.downcast::<PyBool>().is_ok() {
+            return Err(PyTypeError::new_err("argument values must be str or int"));
+        } else if let Ok(s) = v.downcast::<PyString>() {
+            s.to_string()
+        } else if v.downcast::<PyInt>().is_ok() {
+            v.str()?.to_string()
+        } else {
+            return Err(PyTypeError::new_err("argument values must be str or int"));
+        };
+        args.push((key, val));
+    }
+    wrap(py, source::url_template_expand(template, &args))
+}
+
 fn attrs_dict<'py>(py: Python<'py>, attrs: Vec<(String, String)>) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
     for (k, v) in attrs {
@@ -1008,6 +1064,8 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(directive_scan, &internal)?)?;
     internal.add_function(wrap_pyfunction!(generic_fallback, &internal)?)?;
     internal.add_function(wrap_pyfunction!(export_markdown, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(source_validate, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(url_template_expand, &internal)?)?;
     internal.add_function(wrap_pyfunction!(attrs_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_eval, &internal)?)?;

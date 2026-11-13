@@ -21,6 +21,7 @@ pub mod paths;
 pub mod notes;
 pub mod refs;
 pub mod rich;
+pub mod source;
 pub mod unitab;
 pub mod units;
 pub mod utf8;

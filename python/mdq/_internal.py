@@ -109,3 +109,7 @@ citation_resolve = _i.citation_resolve
 toc_build = _i.toc_build
 generic_fallback = _i.generic_fallback
 export_markdown = _i.export_markdown
+
+# E6.1 source declarations and URL templates
+source_validate = _i.source_validate
+url_template_expand = _i.url_template_expand

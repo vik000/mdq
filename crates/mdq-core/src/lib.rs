@@ -3,6 +3,7 @@
 
 pub mod blocks;
 pub mod calc;
+pub mod containers;
 pub mod decimal;
 pub mod diag;
 pub mod dim;

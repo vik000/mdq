@@ -2,6 +2,7 @@
 //! convert the result or error. Everything testable lives in `mdq-core`.
 
 use mdq_core::calc::eval::{self, Value};
+use mdq_core::containers;
 use mdq_core::calc::lexer;
 use mdq_core::calc::parser::{self, Expr, ExprKind};
 use mdq_core::decimal;
@@ -520,6 +521,51 @@ fn md_regions<'py>(py: Python<'py>, text: &str) -> PyResult<Vec<Bound<'py, PyDic
     Ok(out)
 }
 
+fn attrs_dict<'py>(py: Python<'py>, attrs: Vec<(String, String)>) -> PyResult<Bound<'py, PyDict>> {
+    let d = PyDict::new(py);
+    for (k, v) in attrs {
+        d.set_item(k, v)?;
+    }
+    Ok(d)
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, line=1, column=1))]
+fn attrs_parse<'py>(py: Python<'py>, text: &str, line: u32, column: u32) -> PyResult<Bound<'py, PyDict>> {
+    let attrs = wrap(py, containers::attrs_parse(text, line, column))?;
+    attrs_dict(py, attrs)
+}
+
+fn container_dict<'py>(py: Python<'py>, n: containers::Container) -> PyResult<Bound<'py, PyDict>> {
+    let d = PyDict::new(py);
+    d.set_item("name", n.name)?;
+    d.set_item("attrs", attrs_dict(py, n.attrs)?)?;
+    d.set_item("colons", n.colons)?;
+    d.set_item("line", n.line)?;
+    d.set_item("close_line", n.close_line)?;
+    d.set_item("start", n.start)?;
+    d.set_item("body_start", n.body_start)?;
+    d.set_item("body_end", n.body_end)?;
+    d.set_item("end", n.end)?;
+    let mut kids = Vec::with_capacity(n.children.len());
+    for k in n.children {
+        kids.push(container_dict(py, k)?);
+    }
+    d.set_item("children", kids)?;
+    Ok(d)
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, first_line=1))]
+fn container_parse<'py>(py: Python<'py>, text: &str, first_line: u32) -> PyResult<Vec<Bound<'py, PyDict>>> {
+    let roots = wrap(py, containers::container_parse(text, first_line))?;
+    let mut out = Vec::with_capacity(roots.len());
+    for n in roots {
+        out.push(container_dict(py, n)?);
+    }
+    Ok(out)
+}
+
 #[pyfunction]
 #[pyo3(signature = (text, first_line=1))]
 fn directive_scan<'py>(py: Python<'py>, text: &str, first_line: u32) -> PyResult<Vec<Bound<'py, PyDict>>> {
@@ -662,6 +708,8 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(interpolate, &internal)?)?;
     internal.add_function(wrap_pyfunction!(md_regions, &internal)?)?;
     internal.add_function(wrap_pyfunction!(directive_scan, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(attrs_parse, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(container_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_canonical, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_combine, &internal)?)?;
     m.add_submodule(&internal)?;

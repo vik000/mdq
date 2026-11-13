@@ -61,3 +61,7 @@ directive_scan = _i.directive_scan
 
 # E3.1 UTF-8 input
 utf8_decode = _i.utf8_decode
+
+# E3.3 attribute lists and fenced containers
+attrs_parse = _i.attrs_parse
+container_parse = _i.container_parse

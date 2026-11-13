@@ -11,8 +11,9 @@ pub const UNIT_CATALOGUE_VERSION: &str = "0.1.0-draft";
 /// Every profile the spec defines.
 pub const KNOWN_PROFILES: [&str; 4] = ["core", "rich", "calc", "package"];
 
-/// Profiles this build actually implements. Grows as epics land.
-static SUPPORTED_PROFILES: [&str; 0] = [];
+/// Profiles this build actually implements. Grows as epics land: `package` since E7.2;
+/// core, rich and calc are added when `compile` exists (E8.1).
+static SUPPORTED_PROFILES: [&str; 1] = ["package"];
 
 pub fn supported_profiles() -> &'static [&'static str] {
     &SUPPORTED_PROFILES

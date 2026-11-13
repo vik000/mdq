@@ -17,6 +17,7 @@ pub mod imports;
 pub mod inflate;
 pub mod json;
 pub mod links;
+pub mod manifest;
 pub mod meta;
 pub mod net;
 pub mod paths;

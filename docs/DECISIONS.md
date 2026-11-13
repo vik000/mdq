@@ -2,6 +2,36 @@
 
 Per feature. Veto by editing or telling me. Test-plan gap rows (G-numbers) in `docs/TEST_PLAN.md` hold the full wording.
 
+## Fix: E5.2a maths fallback output is a fixed point (G38)
+**Decisions**
+- Found by Hypothesis (`$$a\n$$a$$a$$`): a `$` run that failed to open a span (its first following `$` follows a line break) could pair on a second pass once a later span had become a code span. Such runs are now escaped as `\$`, only when the re-scan of the output would pair them (loop until nothing pairs). `$a $b$` stays `$a `b``.
+
+**Sacrifices**
+- Output may contain `\$` where the input had `$`; renders identically in CommonMark.
+
+**Open**
+- CONFIRMED pre-existing bug, not fixed yet: new code-span backticks can pair with a stray backtick earlier in the paragraph: `` `a $b$ c `` becomes `` `a `b` c ``, which renders as code `a ` followed by text (silent change). Needs a fix (e.g. widen the delimiter past every backtick run in the paragraph, or escape stray backticks). Ruled out: a 3+ backtick delimiter at line start cannot open a fence (its info string always contains backticks).
+
+## E7.2 package manifest (G48)
+**Decisions**
+- `security`: accept both spellings. `network: deny` is read as `none` (package.md example) next to G45's `request|none`; `remote_imports: false` is accepted, `true` is MDQ_UNSUPPORTED_FEATURE. The result is the G45 document layer (requests only, never grants).
+- `features`: non-empty list of unique known profiles (core, rich, calc, package), must include `package`; unknown profile MDQ_UNSUPPORTED_FEATURE naming it. `package` is now a supported profile; core/rich/calc are added when `compile` lands (E8.1).
+- Other top-level keys are shared metadata: returned untouched as `metadata` (lowest cascade layer in E8.1). Sources/variables are validated at compile, not at open (a named source may live in another layer).
+- API: `package_open(data, limits=None)` = `zip_read` + `manifest_parse(text)`; no transport parameter (opening never fetches).
+- `version` must be a quoted string: `version: 0.1` (a YAML number) is MDQ_METADATA_ERROR with a hint, never coerced.
+- `entrypoint` uses the import path rules (G32) and must end in `.md` (case-sensitive); it is found among the archive files by NFC identity, and must itself be valid UTF-8 (G28).
+- The manifest must be exactly `manifest.yaml` at the root (case-sensitive, no `.yml`).
+- `requirements` errors keep the E6.4 codes (MDQ_SOURCE_INVALID "invalid policy: ...") so frontmatter and manifest requirements fail the same way.
+- Wrong `format`/`version` are MDQ_UNSUPPORTED_FEATURE (a future format), wrong types and missing keys MDQ_METADATA_ERROR.
+
+**Sacrifices**
+- Manifest key errors carry no line number (the YAML loader keeps no value positions; same as E6.1).
+- A package whose manifest says `features: [core, rich]` (the spec's own example) does not open until `package` is added.
+
+**Open**
+- Spec example lacks `package` in `features` (strict xfail `test_spec_example_verbatim`): fix the example, or drop the "must include package" rule.
+- Spec conflict on `security` spelling (package.md vs sources-and-permissions.md): ask for a spec fix.
+
 ## E7.1 hostile-zip reader (G47)
 **Decisions**
 - Own DEFLATE decoder (RFC 1951, puff-style) and own CRC-32: no new dependency; zlib raw inflate is the differential oracle. Output is bounded while decoding.

@@ -156,3 +156,7 @@ def inflate(data, max_size):
 
 zip_limits = _i.zip_limits
 zip_read = _i.zip_read
+
+# E7.2 package manifest
+manifest_parse = _i.manifest_parse
+package_open = _i.package_open

@@ -102,6 +102,63 @@ fn math_spans(c: &[char]) -> Vec<(usize, usize, usize, usize)> {
     out
 }
 
+/// The output must be a fixed point: running the fallback on it again changes nothing.
+///
+/// A `$` run that failed to open a span stays literal. Converting a LATER span can remove the run
+/// that blocked it (`$$a\n$$a$$a$$`: the second `$$` follows a line break, so the first cannot close
+/// there; it then opens `$$a$$`, which becomes a code span), and re-reading the output would pair the
+/// literal run with a later `$`. So: build the output of this text, re-scan it, and escape (`\$`) each
+/// literal run that pairs on the re-scan; repeat until nothing pairs. `\$` renders as `$`, and runs
+/// that would not pair again are left alone. Returns (position in `s`, run length) to escape.
+fn fixed_point_escapes(s: &[char], spans: &[(usize, usize, usize, usize, usize, &str)]) -> Vec<(usize, usize)> {
+    let mut escaped: Vec<(usize, usize)> = Vec::new();
+    loop {
+        // Rebuild the output; `from[i]` = position in `s` of output char `i` (None for inserted chars).
+        let mut v: Vec<char> = Vec::new();
+        let mut from: Vec<Option<usize>> = Vec::new();
+        let emit = |t: &str, v: &mut Vec<char>, from: &mut Vec<Option<usize>>| {
+            for ch in t.chars() {
+                v.push(ch);
+                from.push(None);
+            }
+        };
+        let mut i = 0;
+        let mut next = 0; // next span to place
+        while i < s.len() {
+            if next < spans.len() && i == spans[next].0 {
+                let (o, r, q, m, w, pad) = spans[next];
+                emit(&format!("{}{}", "`".repeat(w), pad), &mut v, &mut from);
+                for (k, &ch) in s.iter().enumerate().take(q).skip(o + r) {
+                    v.push(ch);
+                    from.push(Some(k));
+                }
+                emit(&format!("{}{}", pad, "`".repeat(w)), &mut v, &mut from);
+                i = q + m;
+                next += 1;
+            } else if let Some(&(_, r)) = escaped.iter().find(|e| e.0 == i) {
+                emit(&"\\$".repeat(r), &mut v, &mut from);
+                i += r;
+            } else {
+                v.push(s[i]);
+                from.push(Some(i));
+                i += 1;
+            }
+        }
+        let again = math_spans(&v);
+        if again.is_empty() {
+            return escaped;
+        }
+        // Every `$` left in the output is an original literal run, so each new opener maps back.
+        for (o, r, _, _) in again {
+            match from[o] {
+                Some(p) if !escaped.iter().any(|e| e.0 == p) => escaped.push((p, r)),
+                // Cannot happen (inserted chars contain no `$`); stop rather than loop forever.
+                _ => return escaped,
+            }
+        }
+    }
+}
+
 fn bt_runs(chars: &[char]) -> HashSet<usize> {
     let mut runs = HashSet::new();
     let mut k = 0;
@@ -196,16 +253,26 @@ pub fn math_fallback(text: &str, first_line: u32) -> Res<String> {
             }
             if !group.is_empty() {
                 let (s, origin) = leaf_text(&c, &group);
-                for (o, r, q, m) in math_spans(&s) {
-                    let body = &s[o + r..q];
-                    let runs = bt_runs(body);
-                    let mut w = 1;
-                    while runs.contains(&w) {
-                        w += 1;
-                    }
-                    let pad = if body[0] == '`' || body[body.len() - 1] == '`' { " " } else { "" };
+                // Each span with its code-span delimiter: (open, open_len, close, close_len, width, pad).
+                let spans: Vec<(usize, usize, usize, usize, usize, &str)> = math_spans(&s)
+                    .into_iter()
+                    .map(|(o, r, q, m)| {
+                        let body = &s[o + r..q];
+                        let runs = bt_runs(body);
+                        let mut w = 1;
+                        while runs.contains(&w) {
+                            w += 1;
+                        }
+                        let pad = if body[0] == '`' || body[body.len() - 1] == '`' { " " } else { "" };
+                        (o, r, q, m, w, pad)
+                    })
+                    .collect();
+                for &(o, r, q, m, w, pad) in &spans {
                     edits.push(Edit { start: origin[o], end: origin[o] + r, text: format!("{}{}", "`".repeat(w), pad) });
                     edits.push(Edit { start: origin[q], end: origin[q] + m, text: format!("{}{}", pad, "`".repeat(w)) });
+                }
+                for (o, r) in fixed_point_escapes(&s, &spans) {
+                    edits.push(Edit { start: origin[o], end: origin[o] + r, text: "\\$".repeat(r) });
                 }
                 group.clear();
             }

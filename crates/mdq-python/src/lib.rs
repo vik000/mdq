@@ -31,6 +31,7 @@ use mdq_core::version;
 use mdq_core::yaml;
 use mdq_core::inflate;
 use mdq_core::zip;
+use mdq_core::manifest;
 use pyo3::exceptions::{PyException, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyBytes, PyDict, PyInt, PyList, PyString, PyTuple};
@@ -1525,6 +1526,62 @@ fn zip_read<'py>(py: Python<'py>, data: &Bound<'py, PyAny>, limits: Option<&Boun
     Ok(out)
 }
 
+// ---- E7.2 package manifest (G48) ----
+
+fn manifest_to_py<'py>(py: Python<'py>, m: &manifest::Manifest, out: &Bound<'py, PyDict>) -> PyResult<()> {
+    out.set_item("format", &m.format)?;
+    out.set_item("version", &m.version)?;
+    out.set_item("entrypoint", &m.entrypoint)?;
+    out.set_item("features", m.features.clone())?;
+    // `requests` has the E6.4 document-layer shape, so it can be passed to policy_intersect(document=...).
+    let req = PyDict::new(py);
+    req.set_item("network", &m.requests.network)?;
+    if let Some(h) = &m.requests.hosts {
+        req.set_item("hosts", h.clone())?;
+    }
+    let sec = PyDict::new(py);
+    sec.set_item("network", &m.requests.security_network)?;
+    let requests = PyDict::new(py);
+    requests.set_item("requirements", req)?;
+    requests.set_item("security", sec)?;
+    out.set_item("requests", requests)?;
+    let decimal_cls = py.import("decimal")?.getattr("Decimal")?;
+    let meta = PyDict::new(py);
+    for (k, v) in &m.metadata {
+        meta.set_item(k, yaml_to_py(py, v, &decimal_cls)?)?;
+    }
+    out.set_item("metadata", meta)?;
+    Ok(())
+}
+
+/// Internal: check the text of a manifest.yaml.
+#[pyfunction]
+fn manifest_parse<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyDict>> {
+    let m = wrap(py, manifest::manifest_parse(text))?;
+    let out = PyDict::new(py);
+    manifest_to_py(py, &m, &out)?;
+    Ok(out)
+}
+
+/// Internal: open a `.mdq` package from bytes (no transport: opening never fetches).
+#[pyfunction]
+#[pyo3(signature = (data, limits=None))]
+fn package_open<'py>(py: Python<'py>, data: &Bound<'py, PyAny>, limits: Option<&Bound<'py, PyAny>>) -> PyResult<Bound<'py, PyDict>> {
+    let bytes = data.downcast::<PyBytes>().map_err(|_| PyTypeError::new_err("data must be bytes"))?;
+    let l = zip_limits_arg(limits)?;
+    let p = wrap(py, manifest::package_open(bytes.as_bytes(), &l))?;
+    let out = PyDict::new(py);
+    manifest_to_py(py, &p.manifest, &out)?;
+    out.set_item("entrypoint_member", &p.entrypoint_member)?;
+    let files = PyDict::new(py);
+    for (name, data) in &p.files {
+        files.set_item(name, PyBytes::new(py, data))?;
+    }
+    out.set_item("files", files)?;
+    out.set_item("directories", p.directories.clone())?;
+    Ok(out)
+}
+
 /// Internal: profiles this build implements.
 #[pyfunction]
 fn supported_profiles() -> Vec<&'static str> {
@@ -1604,6 +1661,8 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(inflate_hook, &internal)?)?;
     internal.add_function(wrap_pyfunction!(zip_limits, &internal)?)?;
     internal.add_function(wrap_pyfunction!(zip_read, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(manifest_parse, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(package_open, &internal)?)?;
     internal.add_function(wrap_pyfunction!(attrs_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_eval, &internal)?)?;

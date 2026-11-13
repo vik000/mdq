@@ -424,3 +424,21 @@ def test_footnote_rename_and_link_rebase_apply_to_the_same_piece():
 def test_footnotes_param_type_error():
     with pytest.raises(TypeError):
         mi.import_expand("a\n", "main.md", FS({}), footnotes="no")
+
+
+# Regression (found by Hypothesis, 2026-11-13): a `$` run that fails to open a span must not pair with a
+# later `$` once a following span has been turned into a code span. Such runs are escaped (`\$`, renders
+# as `$`); runs that would not pair again are left as they are.
+@pytest.mark.parametrize("src,want", [
+    ("$$a\n$$a$$a$$", "\\$\\$a\n`a`a$$"),
+    ("$a\n$b$c$", "\\$a\n`b`c$"),
+    ("x $a\n$b$ $c$ d$", "x \\$a\n`b` `c` d$"),
+    ("$a $b$", "$a `b`"),          # nothing to pair with afterwards: unchanged
+    ("$a\n$b$", "$a\n`b`"),
+])
+def test_math_output_is_a_fixed_point_regression(src, want):
+    assert mf(src) == want
+    assert mf(want) == want
+    # the escapes are invisible once rendered: no backslash survives, every `$` is still shown
+    html = MarkdownIt("commonmark").render(want)
+    assert "\\" not in html and html.count("$") == want.count("$")

@@ -638,11 +638,25 @@ pub fn directives(text: &str, first_line: u32) -> Res<Vec<Directive>> {
 pub struct Scope<'a> {
     vars: &'a Yaml,
     loops: Vec<(String, &'a Yaml)>,
+    /// A namespace whose references are left in the text for a later pass (`calc` in `compile`:
+    /// its values exist only after the calc blocks of the evaluated document have run).
+    defer: Option<String>,
 }
 
 impl<'a> Scope<'a> {
     pub fn new(vars: &'a Yaml) -> Scope<'a> {
-        Scope { vars, loops: Vec::new() }
+        Scope { vars, loops: Vec::new(), defer: None }
+    }
+
+    /// Like `new`, but `{{ns.*}}` references are copied through unchanged.
+    pub fn deferring(vars: &'a Yaml, ns: &str) -> Scope<'a> {
+        Scope { vars, loops: Vec::new(), defer: Some(ns.to_string()) }
+    }
+
+    /// Is `name` in the deferred namespace (and not hidden by a loop variable of that name)?
+    pub fn is_deferred(&self, name: &str) -> bool {
+        let first = name.split('.').next().unwrap_or(name);
+        self.defer.as_deref() == Some(first) && !self.loops.iter().any(|(n, _)| n == first)
     }
 
     pub fn push(&mut self, name: &str, value: &'a Yaml) {
@@ -687,6 +701,12 @@ pub fn interpolate_with(text: &str, scope: &Scope, first_line: u32) -> Res<Strin
     let mut out = String::with_capacity(text.len());
     let mut pos = 0usize;
     for d in found {
+        if scope.is_deferred(&d.name) {
+            // Left for the later pass, exactly as written.
+            out.extend(c[pos..d.end].iter());
+            pos = d.end;
+            continue;
+        }
         let at = |dd: Diagnostic| dd.at_position(d.line, d.column);
         let value = match scope.get(&d.name) {
             Some(v) => v,

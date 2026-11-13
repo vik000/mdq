@@ -189,7 +189,9 @@ def test_inline_maths_matches_regex_oracle(s):
     src = s.replace("\n", " ") + "\n"
     if src.startswith("    "):
         return
-    assert mf(src) == oracle_inline(src)
+    # The alphabet has no backslash, so any `\$` is the fixed-point escape added since 1f8c87b (G38):
+    # it renders as `$`, and the regex oracle does not model it.
+    assert mf(src).replace("\\$", "$") == oracle_inline(src)
 
 
 @given(st.lists(st.sampled_from(list("ab1 $\\`*_") + ["\n", "\n\n", "$$"]), max_size=16).map("".join))
@@ -197,7 +199,8 @@ def test_math_is_idempotent_and_never_changes_dollar_free_text(s):
     try:
         once = mf(s)
     except mdq.MdqError as e:
-        assert e.code == "MDQ_INVALID_SYNTAX"
+        # MDQ_UNSUPPORTED_FEATURE: maths touching a backtick is refused since 3544e4b (G38).
+        assert e.code in ("MDQ_INVALID_SYNTAX", "MDQ_UNSUPPORTED_FEATURE")
         return
     if "$" not in s:
         assert once == s

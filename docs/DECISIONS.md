@@ -22,6 +22,34 @@ Per feature. Veto by editing or telling me. Test-plan gap rows (G-numbers) in `d
 **Open**
 - Per-member encryption layout (spec gap 4): strict xfail `test_per_member_encryption_layout`.
 
+## E8.1a compile and evaluate (G50)
+**Decisions**
+- Sources are never modified: `compile`/`evaluate` read through the file-system callback and return new text and data; they write nothing (saving is the host's job).
+- Three slices: E8.1a one document from a file system (frontmatter, sidecar, `.mdq.yaml` cascade, imports, if/for, calc, interpolation, rich fallbacks, export); E8.1b variable files, FX observations, source snapshots; E8.1c packages (manifest as lowest layer, `.mdq.age`, plaintext-export permission) and the public `test_source`.
+- File input: `compile(entry, fs=...)` with `mdq.MemoryFS({path: str|bytes})` or `mdq.DirectoryFS(root)` (E4.1 confinement, symlinks included); a dict is shorthand for MemoryFS; the core reads through one callback and never touches the disk itself.
+- G11 resolved for compile: a bare calc name resolves to (1) an earlier assignment in the same block, then (2) an entry directly under `variables:` of the effective metadata. Both places count: any metadata layer (sidecar, frontmatter, directory/project `.mdq.yaml`, later the manifest) and in-memory host `inputs=`, which is the top layer ("explicit invocation overrides", spec 5). Unknown name: MDQ_CALC_ERROR. Other metadata (`title`, ...) is never visible to calc.
+- Two functions: `mdq.compile(entry, fs, inputs=..., calc_blocks="remove"|"keep")` returns the new Markdown plus the data; `mdq.evaluate(entry, fs, inputs=...)` returns only the data (each calc block's source, position and results as exact Decimal, type, unit, display text; the effective metadata). `calc_blocks="remove"` (default) leaves calc blocks out of the output, `"keep"` keeps their source as a plain code block; the data is always returned either way.
+- Order for calc (spec 9 leaves it open): containers and `{{...}}` per file with `{{calc.*}}` deferred, then imports, then the calc blocks that survived, then a second pass for `{{calc.*}}`. So calc blocks in excluded branches are never evaluated, and `:::if`/`:::for` cannot use calc results (MDQ_UNSUPPORTED_FEATURE).
+- Interpolation scope (spec 5 "frontmatter fields under `document.*`, imported variable mappings use their declared namespace"): `document.*` = the whole effective metadata; each `variables:` entry is a top-level name; `document` and `calc` are reserved (MDQ_METADATA_ERROR).
+- Calc inputs from metadata: numbers, and strings written as calc literals (`"120 EUR"`); other values are not visible to calc.
+- Each calc block keeps its own scope (spec 8.1); blocks share values only through `{{calc.*}}` in text.
+- Strings that look like variable files are refused until E8.1b reads them, so their meaning cannot change silently.
+- Calc fences inside quotes or list items are refused, not skipped.
+- Imported files' own frontmatter is ignored; the root document's metadata applies everywhere.
+- Block-ID markers are stripped from the output (spec 2); wiki links `[[x]]` stay literal text.
+- `mdq`/`features` are checked; core, rich and calc are now supported profiles.
+- Existing tests adjusted (assertions only): `test_e5_f52_math_footnotes.py` (the idempotency test now also accepts MDQ_UNSUPPORTED_FEATURE since 3544e4b; the regex oracle ignores the `\$` fixed-point escape since 1f8c87b); `test_e7_f73_age.py` (`test_bad_identities[ids2]` was flaky once in 32 runs).
+
+**Sacrifices**
+- Line numbers of errors raised after imports (second calc pass, export) are mapped through the import source map; after removed `:::if`/`:::for` branches they can be off (calc block errors are exact when the block content is unique in its file).
+- No scoped metadata for imported files.
+- Bibliographies are not loaded yet, so citations fail until E8.1b.
+
+**Open**
+- After `:::if`/`:::for`, the paragraphs on either side of a removed fence merge (`A` / `:::` / `B` renders as one paragraph), although G31 treats fences as block boundaries. Inserting a blank line would keep them apart but turn loop-built lists into loose lists. Strict xfail `test_container_boundaries_survive_evaluation`. Which behaviour?
+- The E2.4 escaper (G26) escapes `N.` at the start of a line even when no space follows (`7.5` becomes `7\.5`, renders as `7.5`). Narrow it to real list markers?
+- Exception hierarchy under `MdqError`: E8.2.
+
 ## Fix: E5.2a maths fallback, backticks (G38)
 **Decisions**
 - The inline code-span delimiter avoids the length of every unmatched (literal) backtick run in the paragraph, not just runs in the maths body: `` `a $b$ c `` becomes `` `a ``b`` c `` (before: `` `a `b` c ``, which rendered as code `a `). Matched code spans are ignored, so existing outputs such as `` `code` and `x` `` are unchanged.

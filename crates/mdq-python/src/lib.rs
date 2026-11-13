@@ -33,6 +33,7 @@ use mdq_core::inflate;
 use mdq_core::zip;
 use mdq_core::manifest;
 use mdq_core::age;
+use mdq_core::compile;
 use pyo3::exceptions::{PyException, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyBytes, PyDict, PyInt, PyList, PyString, PyTuple};
@@ -1709,6 +1710,115 @@ fn package_open_age<'py>(
     package_to_py(py, &p)
 }
 
+// ---- E8.1a compile / evaluate (G50) ----
+
+fn calc_value_dict<'py>(py: Python<'py>, r: &mdq_core::calc::eval::EvalResult, decimal_cls: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
+    use mdq_core::calc::eval::Value as V;
+    let d = PyDict::new(py);
+    d.set_item("name", &r.name)?;
+    d.set_item("line", r.line)?;
+    d.set_item("column", r.col)?;
+    d.set_item("type", r.value.type_name())?;
+    d.set_item("value", decimal_cls.call1((r.value.magnitude().to_canonical(),))?)?;
+    let (unit, currency): (Option<&str>, Option<&str>) = match &r.value {
+        V::Decimal(_) => (None, None),
+        V::Quantity { unit, .. } => (Some(unit.symbol.as_str()), None),
+        V::Money { currency, .. } => (None, Some(currency.as_str())),
+    };
+    d.set_item("unit", unit)?;
+    d.set_item("currency", currency)?;
+    d.set_item("display", mdq_core::calc::render::render_value(&r.value))?;
+    Ok(d)
+}
+
+/// Internal: run the compile pipeline. `read(path)` returns bytes, str or None (missing); its
+/// exceptions propagate unchanged. `markdown=False` is `evaluate` (data only).
+#[pyfunction]
+#[pyo3(signature = (entry, read, inputs=None, profile="commonmark", keep_calc=false, markdown=true,
+                    max_iterations=10000, max_depth=64, max_expansions=10000, max_bytes=16777216))]
+#[allow(clippy::too_many_arguments)]
+fn compile_document<'py>(
+    py: Python<'py>,
+    entry: &str,
+    read: &Bound<'py, PyAny>,
+    inputs: Option<&Bound<'py, PyAny>>,
+    profile: &str,
+    keep_calc: bool,
+    markdown: bool,
+    max_iterations: usize,
+    max_depth: usize,
+    max_expansions: usize,
+    max_bytes: usize,
+) -> PyResult<Bound<'py, PyDict>> {
+    if !read.is_callable() {
+        return Err(PyTypeError::new_err("read must be callable"));
+    }
+    let prof = export::Profile::parse(profile).ok_or_else(|| PyValueError::new_err("profile must be 'commonmark' or 'gfm'"))?;
+    let inputs_yaml = match inputs {
+        None => yaml::Yaml::Map(Vec::new()),
+        Some(o) if o.is_none() => yaml::Yaml::Map(Vec::new()),
+        Some(o) => {
+            if o.downcast::<PyDict>().is_err() {
+                return Err(PyTypeError::new_err("inputs must be a dict"));
+            }
+            py_to_yaml(py, o, 0)?
+        }
+    };
+    let failure: std::cell::RefCell<Option<PyErr>> = std::cell::RefCell::new(None);
+    let mut reader = |p: &str| -> Result<Option<Vec<u8>>, Diagnostic> {
+        let sentinel = || Diagnostic::new(mdq_core::diag::Code::SourceFetchFailed, "read callback failed");
+        match read.call1((p,)) {
+            Err(e) => {
+                *failure.borrow_mut() = Some(e);
+                Err(sentinel())
+            }
+            Ok(v) if v.is_none() => Ok(None),
+            Ok(v) => {
+                if let Ok(b) = v.downcast::<PyBytes>() {
+                    Ok(Some(b.as_bytes().to_vec()))
+                } else if let Ok(s) = v.downcast::<PyString>() {
+                    Ok(Some(s.to_string().into_bytes()))
+                } else {
+                    *failure.borrow_mut() = Some(PyTypeError::new_err("read() must return bytes, str or None"));
+                    Err(sentinel())
+                }
+            }
+        }
+    };
+    let opts = compile::Options {
+        profile: prof,
+        keep_calc,
+        markdown,
+        imports: imports::Limits { max_depth, max_expansions, max_bytes, rebase_links: true, footnotes: true },
+        max_iterations,
+    };
+    let res = compile::compile(entry, &mut reader, &inputs_yaml, &opts);
+    if let Some(e) = failure.borrow_mut().take() {
+        return Err(e);
+    }
+    let r = wrap(py, res)?;
+    let decimal_cls = py.import("decimal")?.getattr("Decimal")?;
+    let out = PyDict::new(py);
+    out.set_item("markdown", r.markdown)?;
+    out.set_item("metadata", yaml_to_py(py, &r.metadata, &decimal_cls)?)?;
+    out.set_item("provenance", r.provenance)?;
+    let blocks = PyList::empty(py);
+    for b in &r.calc {
+        let d = PyDict::new(py);
+        d.set_item("path", &b.path)?;
+        d.set_item("line", b.line)?;
+        d.set_item("source", &b.source)?;
+        let results = PyList::empty(py);
+        for x in &b.results {
+            results.append(calc_value_dict(py, x, &decimal_cls)?)?;
+        }
+        d.set_item("results", results)?;
+        blocks.append(d)?;
+    }
+    out.set_item("calc", blocks)?;
+    Ok(out)
+}
+
 /// Internal: profiles this build implements.
 #[pyfunction]
 fn supported_profiles() -> Vec<&'static str> {
@@ -1796,6 +1906,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(age_recipient, &internal)?)?;
     internal.add_function(wrap_pyfunction!(age_identity, &internal)?)?;
     internal.add_function(wrap_pyfunction!(package_open_age, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(compile_document, &internal)?)?;
     internal.add_function(wrap_pyfunction!(attrs_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_eval, &internal)?)?;

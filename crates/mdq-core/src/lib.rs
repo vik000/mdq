@@ -14,6 +14,7 @@ pub mod frontmatter;
 pub mod fx;
 pub mod headings;
 pub mod cite;
+pub mod compile;
 pub mod imports;
 pub mod inflate;
 pub mod json;

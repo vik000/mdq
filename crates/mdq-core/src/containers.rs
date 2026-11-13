@@ -368,6 +368,13 @@ impl<'t> Ev<'t> {
                 1,
             ));
         }
+        if scope.is_deferred(name) {
+            return Err(Diagnostic::new(
+                Code::UnsupportedFeature,
+                format!("\"{}\" is a calc result; :::if and :::for cannot use calc results", name),
+            )
+            .at_position(n.line, 1));
+        }
         match scope.get(name) {
             Some(v) => Ok(v),
             None => Err(Diagnostic::new(Code::UndefinedVariable, format!("undefined variable \"{}\"", name))
@@ -436,11 +443,19 @@ impl<'t> Ev<'t> {
 
 /// Resolve `if`/`for` containers and interpolate everything else (see G31).
 pub fn container_eval(text: &str, vars_yaml: &Yaml, first_line: u32, max_iterations: usize) -> Res<String> {
+    eval_with(text, Scope::new(vars_yaml), first_line, max_iterations)
+}
+
+/// `container_eval`, leaving `{{defer.*}}` references in place for a later pass (see `Scope`).
+pub fn container_eval_deferred(text: &str, vars_yaml: &Yaml, defer: &str, first_line: u32, max_iterations: usize) -> Res<String> {
+    eval_with(text, Scope::deferring(vars_yaml, defer), first_line, max_iterations)
+}
+
+fn eval_with(text: &str, mut scope: Scope<'_>, first_line: u32, max_iterations: usize) -> Res<String> {
     let tree = container_parse(text, first_line)?;
     let c: Vec<char> = text.chars().collect();
     let (starts, _ends) = blocks::line_bounds(&c);
     let mut ev = Ev { c: &c, starts: &starts, first_line, iterations: 0, max_iterations, size: 0 };
-    let mut scope = Scope::new(vars_yaml);
     let mut out = String::with_capacity(text.len());
     ev.range(0, c.len(), &tree, &mut scope, &mut out)?;
     Ok(out)

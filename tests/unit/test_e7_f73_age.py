@@ -308,7 +308,7 @@ def test_payload_too_short(assert_mdq_error):
 
 
 # ---------------------------------------------------------------- arguments
-@pytest.mark.parametrize("ids", [["AGE-SECRET-KEY-1xyz"], [PK1], ["age-secret-key-1" + SK1[16:].lower()[:-1] + "q"],
+@pytest.mark.parametrize("ids", [["AGE-SECRET-KEY-1xyz"], [PK1], ["age-secret-key-1" + SK1[16:].lower()[:-1] + ("q" if SK1[-1].lower() != "q" else "p")],
                                  [SK1[:20] + SK1[20:].lower()]])
 def test_bad_identities(ids):
     with pytest.raises(ValueError):

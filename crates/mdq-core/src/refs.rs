@@ -229,3 +229,48 @@ pub(crate) fn heading_level(c: &[char], starts: &[usize], ends: &[usize], a: usi
         }
     }
 }
+
+/// Remove every block-ID marker (`^id`) from the text, as compiled output requires (spec section 2).
+/// Line structure is kept: a marker alone on the last line of a paragraph leaves an empty line.
+/// Duplicate IDs are NOT checked here (after imports, IDs from different files may repeat).
+pub fn strip_block_ids(text: &str) -> Res<String> {
+    let c: Vec<char> = text.chars().collect();
+    let (starts, ends) = line_bounds(&c);
+    let leaves = parse(&c, &starts, &ends, 1)?;
+    let mut cuts: Vec<(usize, usize)> = Vec::new(); // char ranges to delete
+    for leaf in &leaves {
+        let heading = match leaf.kind {
+            Kind::Heading => true,
+            Kind::Paragraph => false,
+            _ => continue,
+        };
+        let mut texts: Vec<Vec<char>> = leaf.segments.iter().map(|&(s, e)| c[s..e].to_vec()).collect();
+        if texts.is_empty() {
+            continue;
+        }
+        if heading && leaf.end_line - leaf.first_line == 1 {
+            let n = texts.len() - 1;
+            let s: String = texts[n].iter().collect();
+            texts[n] = atx_strip(&s).chars().collect();
+        }
+        if let Some((id, cut)) = marker(&texts) {
+            let seg_start = leaf.segments.last().map(|x| x.0).unwrap_or(0);
+            let caret = seg_start + cut;
+            let end = caret + 1 + id.chars().count();
+            // Also remove the blanks before the marker, but never past the start of the segment.
+            let mut start = caret;
+            while start > seg_start && matches!(c[start - 1], ' ' | '\t') {
+                start -= 1;
+            }
+            cuts.push((start, end));
+        }
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut pos = 0;
+    for (a, b) in cuts {
+        out.extend(c[pos..a].iter());
+        pos = b;
+    }
+    out.extend(c[pos..].iter());
+    Ok(out)
+}

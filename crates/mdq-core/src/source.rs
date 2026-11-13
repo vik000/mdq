@@ -409,7 +409,12 @@ fn walk(
 /// Validate the `sources` and `variables` of effective metadata (YAML text) and list the declared
 /// variables in document order. Plain values and namespaces without `source`/`type` are ignored.
 pub fn source_validate(text: &str, first_line: u32) -> Res<Vec<Declared>> {
-    let Yaml::Map(root) = yaml::load(text, true, first_line)? else {
+    source_validate_value(&yaml::load(text, true, first_line)?)
+}
+
+/// `source_validate` on an already-loaded metadata value (used by `compile`).
+pub fn source_validate_value(meta: &Yaml) -> Res<Vec<Declared>> {
+    let Yaml::Map(root) = meta else {
         return Ok(Vec::new());
     };
     let mut named: Vec<(String, Source)> = Vec::new();

@@ -24,6 +24,7 @@
 use crate::blocks::{line_bounds, parse, Kind};
 use crate::calc::eval::{evaluate_source, parse_host_values, EvalResult, Value};
 use crate::containers::container_eval_deferred;
+use crate::data::{self, Resolved};
 use crate::decimal::Decimal;
 use crate::diag::{Code, Diagnostic};
 use crate::export::{export_markdown, Profile};
@@ -33,6 +34,7 @@ use crate::imports::{import_expand, Expanded, Limits};
 use crate::meta::{cascade_with_top, Cascade, Layer};
 use crate::paths::path_normalise;
 use crate::refs::strip_block_ids;
+use crate::resolver::SVal;
 use crate::utf8;
 use crate::vars::interpolate;
 use crate::version::{check_required, SYNTAX_VERSION};
@@ -79,6 +81,8 @@ pub struct Compiled {
     /// (JSON Pointer, layer name) for every metadata leaf (G24).
     pub provenance: Vec<(String, String)>,
     pub calc: Vec<CalcBlock>,
+    /// Declared variables (E6.1) with their values, in declaration order.
+    pub values: Vec<Resolved>,
 }
 
 const RESERVED: [&str; 2] = ["document", "calc"];
@@ -131,34 +135,18 @@ fn check_versions(meta: &Yaml) -> Res<()> {
     check_required(&features, &version)
 }
 
-/// A string that looks like a variable FILE (`./data/project.yaml`): E8.1b reads those. Refusing
-/// them now means their meaning cannot silently change when that lands.
-fn looks_like_file(s: &str) -> bool {
-    let lower = s.to_ascii_lowercase();
-    (s.starts_with("./") || s.starts_with("../") || s.starts_with('/'))
-        && [".yaml", ".yml", ".json"].iter().any(|e| lower.ends_with(e))
-}
-
-/// The interpolation scope (step 3) and the calc inputs (G11) from the effective metadata.
-fn scope_and_inputs(meta: &Yaml) -> Res<(Yaml, HashMap<String, Value>)> {
-    let vars: Vec<(String, Yaml)> = match get(meta, "variables") {
-        None | Some(Yaml::Null) => Vec::new(),
-        Some(Yaml::Map(e)) => e.clone(),
-        Some(_) => return Err(meta_err("variables must be a mapping")),
+/// The interpolation scope (step 3) and the calc inputs (G11): `document.*` = the effective
+/// metadata, every entry of the (resolved) `variables` tree a top-level name.
+fn scope_and_inputs(meta: &Yaml, vars: &Yaml) -> Res<(Yaml, HashMap<String, Value>)> {
+    let vars: Vec<(String, Yaml)> = match vars {
+        Yaml::Map(e) => e.clone(),
+        _ => Vec::new(),
     };
     let mut scope = vec![("document".to_string(), meta.clone())];
     let mut calc_in = HashMap::new();
     for (k, v) in &vars {
         if RESERVED.contains(&k.as_str()) {
             return Err(meta_err(format!("variables.{} uses a reserved namespace ({})", k, RESERVED.join(", "))));
-        }
-        if let Yaml::Str(s) = v {
-            if looks_like_file(s) {
-                return Err(Diagnostic::new(
-                    Code::UnsupportedFeature,
-                    format!("variables.{}: variable files are not supported yet", k),
-                ));
-            }
         }
         // Calc inputs: numbers, and strings in calc literal syntax ("120 EUR", "12 km"). Other
         // values are simply not visible to calc (an unknown name there is MDQ_CALC_ERROR).
@@ -185,6 +173,22 @@ fn scope_and_inputs(meta: &Yaml) -> Res<(Yaml, HashMap<String, Value>)> {
     }
     scope.push(("calc".to_string(), Yaml::Map(Vec::new())));
     Ok((Yaml::Map(scope), calc_in))
+}
+
+/// A declared number with a unit must be usable by calc: the unit is a catalogue unit or a
+/// currency code, otherwise the declaration is refused (never silently invisible to calc).
+fn check_units(values: &[Resolved]) -> Res<()> {
+    for r in values {
+        if let (crate::source::Typed::Num(n), Some(u)) = (&r.checked.value, &r.checked.unit) {
+            if parse_host_values(&[("v".to_string(), format!("{} {}", n, u))]).is_err() {
+                return Err(Diagnostic::new(
+                    Code::SourceInvalid,
+                    format!("variables.{}: unit {:?} is neither a catalogue unit nor a currency code", r.name, u),
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Directory part of a root-relative path ("" for the root).
@@ -279,7 +283,7 @@ fn remap(ex: &Expanded, mut d: Diagnostic) -> Diagnostic {
 }
 
 /// Compile (or, with `opts.markdown = false`, only evaluate) the document at `entry`.
-pub fn compile(entry: &str, read: Read<'_>, inputs: &Yaml, opts: &Options) -> Res<Compiled> {
+pub fn compile(entry: &str, read: Read<'_>, inputs: &Yaml, snapshot: &[SVal], fx: &FxContext, opts: &Options) -> Res<Compiled> {
     let entry = path_normalise("", entry)?;
     let text = read_text(read, &entry)?.ok_or_else(|| {
         in_file(Diagnostic::new(Code::MissingImport, "the entry file does not exist"), &entry)
@@ -309,13 +313,40 @@ pub fn compile(entry: &str, read: Read<'_>, inputs: &Yaml, opts: &Options) -> Re
     if let Some(t) = read_text(read, &sidecar)? {
         cas.sidecar = Some(Layer::new(&sidecar, &t, 1));
     }
-    let top = match inputs {
-        Yaml::Map(e) if !e.is_empty() => Some(Yaml::Map(vec![("variables".to_string(), inputs.clone())])),
+    // Declarations come from the files only: an input layered on top would replace the
+    // declaration it is meant to fill. Inputs for declared variables are taken out first.
+    let files_only = cascade_with_top(&cas, None)?;
+    if !matches!(get(&files_only.value, "variables"), None | Some(Yaml::Null) | Some(Yaml::Map(_))) {
+        return Err(meta_err("variables must be a mapping"));
+    }
+    let decls = data::declarations(&files_only.value, &files_only.provenance)?;
+    let mut rest = inputs.clone();
+    let host_values = data::take_declared_inputs(&decls, &mut rest)?;
+    let top = match &rest {
+        Yaml::Map(e) if !e.is_empty() => Some(Yaml::Map(vec![("variables".to_string(), rest.clone())])),
         _ => None,
     };
     let merged = cascade_with_top(&cas, top.as_ref().map(|t| ("<inputs>", t)))?;
     check_versions(&merged.value)?;
-    let (scope, calc_in) = scope_and_inputs(&merged.value)?;
+    let values = data::resolve(&decls, snapshot, &host_values)?;
+    check_units(&values)?;
+    let mut vars = match get(&merged.value, "variables") {
+        None | Some(Yaml::Null) => Yaml::Map(Vec::new()),
+        Some(m @ Yaml::Map(_)) => m.clone(),
+        Some(_) => return Err(meta_err("variables must be a mapping")),
+    };
+    data::load_var_files(&mut vars, &merged.provenance, &mut |p| read_text(read, p))?;
+    data::apply_values(&mut vars, &values);
+    let bibs = data::load_bibliographies(&merged.value, &merged.provenance, &mut |p| read_text(read, p))?;
+    // The effective metadata as the document sees it: variable files loaded, declarations
+    // replaced by their values.
+    let mut effective = merged.value.clone();
+    if let Yaml::Map(e) = &mut effective {
+        if let Some(slot) = e.iter_mut().find(|(k, _)| k == "variables") {
+            slot.1 = vars.clone();
+        }
+    }
+    let (scope, calc_in) = scope_and_inputs(&effective, &vars)?;
 
     // 4. containers (calc deferred) per file, then imports of already-evaluated files.
     let mut originals: HashMap<String, String> = HashMap::new();
@@ -344,7 +375,6 @@ pub fn compile(entry: &str, read: Read<'_>, inputs: &Yaml, opts: &Options) -> Re
 
     // 5. calc blocks
     let (fences, c, starts, ends) = calc_fences(&ex.text).map_err(|d| remap(&ex, d))?;
-    let fx = FxContext::empty();
     let mut blocks: Vec<CalcBlock> = Vec::new();
     let mut exported: HashMap<String, (String, u32)> = HashMap::new();
     let mut calc_ns: Vec<(String, Yaml)> = Vec::new();
@@ -352,7 +382,7 @@ pub fn compile(entry: &str, read: Read<'_>, inputs: &Yaml, opts: &Options) -> Re
         let source = lines_text(&c, &starts, &ends, f.a, f.b);
         let (path, open_line) = locate(&ex, f.open as u32 + 1).unwrap_or((entry.clone(), f.open as u32 + 1));
         let line = exact_line(originals.get(&path), &source).unwrap_or(open_line);
-        let results = evaluate_source(&source, line + 1, &calc_in, &fx).map_err(|d| in_file(d, &path))?;
+        let results = evaluate_source(&source, line + 1, &calc_in, fx).map_err(|d| in_file(d, &path))?;
         for r in &results {
             if let Some((p, l)) = exported.get(&r.name) {
                 return Err(Diagnostic::new(
@@ -376,12 +406,12 @@ pub fn compile(entry: &str, read: Read<'_>, inputs: &Yaml, opts: &Options) -> Re
 
     // 7. export, then drop the calc blocks
     let markdown = if opts.markdown {
-        let out = export_markdown(&text3, opts.profile, &[], 1).map_err(|d| remap(&ex, d))?;
+        let out = export_markdown(&text3, opts.profile, &bibs, 1).map_err(|d| remap(&ex, d))?;
         Some(if opts.keep_calc { out } else { remove_calc_blocks(&out)? })
     } else {
         None
     };
-    Ok(Compiled { markdown, metadata: merged.value, provenance: merged.provenance, calc: blocks })
+    Ok(Compiled { markdown, metadata: effective, provenance: merged.provenance, calc: blocks, values })
 }
 
 /// The 1-based line of the opening fence of the ONE calc block in `original` whose content is

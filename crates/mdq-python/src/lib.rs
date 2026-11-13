@@ -1735,7 +1735,8 @@ fn calc_value_dict<'py>(py: Python<'py>, r: &mdq_core::calc::eval::EvalResult, d
 /// exceptions propagate unchanged. `markdown=False` is `evaluate` (data only).
 #[pyfunction]
 #[pyo3(signature = (entry, read, inputs=None, profile="commonmark", keep_calc=false, markdown=true,
-                    max_iterations=10000, max_depth=64, max_expansions=10000, max_bytes=16777216))]
+                    max_iterations=10000, max_depth=64, max_expansions=10000, max_bytes=16777216,
+                    snapshot=None, observations=None, valuation=None, market=None, pins=None))]
 #[allow(clippy::too_many_arguments)]
 fn compile_document<'py>(
     py: Python<'py>,
@@ -1749,10 +1750,29 @@ fn compile_document<'py>(
     max_depth: usize,
     max_expansions: usize,
     max_bytes: usize,
+    snapshot: Option<&Bound<'py, PyAny>>,
+    observations: Option<Vec<std::collections::HashMap<String, String>>>,
+    valuation: Option<String>,
+    market: Option<String>,
+    pins: Option<std::collections::HashMap<String, std::collections::HashMap<String, String>>>,
 ) -> PyResult<Bound<'py, PyDict>> {
     if !read.is_callable() {
         return Err(PyTypeError::new_err("read must be callable"));
     }
+    let dec = py.import("decimal")?.getattr("Decimal")?;
+    let mut snap = Vec::new();
+    if let Some(sv) = snapshot.filter(|v| !v.is_none()) {
+        if sv.downcast::<PyList>().is_err() && sv.downcast::<PyTuple>().is_err() {
+            return Err(PyTypeError::new_err("snapshot must be a list of entries"));
+        }
+        for e in sv.try_iter()? {
+            snap.push(to_sval(&e?, &dec)?);
+        }
+    }
+    let fx_ctx = wrap(
+        py,
+        fx::FxContext::from_parts(&observations.unwrap_or_default(), valuation.as_deref(), market.as_deref(), &pins.unwrap_or_default()),
+    )?;
     let prof = export::Profile::parse(profile).ok_or_else(|| PyValueError::new_err("profile must be 'commonmark' or 'gfm'"))?;
     let inputs_yaml = match inputs {
         None => yaml::Yaml::Map(Vec::new()),
@@ -1792,7 +1812,7 @@ fn compile_document<'py>(
         imports: imports::Limits { max_depth, max_expansions, max_bytes, rebase_links: true, footnotes: true },
         max_iterations,
     };
-    let res = compile::compile(entry, &mut reader, &inputs_yaml, &opts);
+    let res = compile::compile(entry, &mut reader, &inputs_yaml, &snap, &fx_ctx, &opts);
     if let Some(e) = failure.borrow_mut().take() {
         return Err(e);
     }
@@ -1816,6 +1836,32 @@ fn compile_document<'py>(
         blocks.append(d)?;
     }
     out.set_item("calc", blocks)?;
+    let values = PyList::empty(py);
+    for v in &r.values {
+        let d = PyDict::new(py);
+        d.set_item("name", &v.name)?;
+        d.set_item("type", &v.checked.vtype)?;
+        match &v.checked.value {
+            source::Typed::Num(n) => d.set_item("value", dec.call1((n.as_str(),))?)?,
+            source::Typed::Str(x) | source::Typed::Date(x) => d.set_item("value", x)?,
+            source::Typed::Bool(b) => d.set_item("value", *b)?,
+        }
+        d.set_item("unit", &v.checked.unit)?;
+        d.set_item("retrieved_at", &v.retrieved_at)?;
+        match &v.source {
+            None => d.set_item("source", py.None())?,
+            Some(src) => {
+                let sd = PyDict::new(py);
+                sd.set_item("kind", &src.kind)?;
+                sd.set_item("named", &src.named)?;
+                sd.set_item("origin", &src.origin)?;
+                sd.set_item("key", &src.key)?;
+                d.set_item("source", sd)?;
+            }
+        }
+        values.append(d)?;
+    }
+    out.set_item("values", values)?;
     Ok(out)
 }
 

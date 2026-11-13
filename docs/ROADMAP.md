@@ -3,7 +3,7 @@
 Updated with every commit. Estimates are in sessions (one session = one feature cycle: Rust, shim check, tests,
 commit message), rough, about ±50%. Feature definitions and tests: `docs/TEST_PLAN.md` section 4.
 
-**Last update:** E8.1a `compile`/`evaluate` built natively (5206 passed, 4 strict xfails: G48, GAP-4, G38 maths/code overlap, G50 container boundaries).
+**Last update:** E8.1b data and sources in compile built natively (5238 passed, 4 strict xfails: G48, GAP-4, G38, G50).
 
 ## Status
 
@@ -18,11 +18,11 @@ commit message), rough, about ±50%. Feature definitions and tests: `docs/TEST_P
 | 5 Rich features and export (F10, F23) | done | E5.1 highlight/callout/details/columns ✔, E5.2a math/footnotes ✔ (fixes: fixed point 1f8c87b, backticks 3544e4b), E5.2b citations ✔, E5.3 TOC ✔, E5.4 `export_markdown` ✔ | | 0 |
 | 6 Sources and policy (F16–F19) | done | E6.1 declarations and URL templates ✔, E6.2 JSON Pointer and types ✔, E6.3 URL/IP classification ✔, E6.4 policy ✔, E6.5 resolver, fake transport and snapshots ✔ | | 0 |
 | 7 Packages and encryption (F20, F21) | done | E7.1 hostile-zip reader ✔, E7.2 manifest and `package_open` ✔, E7.3 age (X25519 + passphrase, pyrage-verified) ✔ | c04ca23 (E7.1), 1f8c87b (E7.2 + E5.2a fix), fd299f6 (E7.3) | 0 |
-| 8 API, CLI, packaging (F25, F26) | in progress | E8.1a `compile`/`evaluate`, MemoryFS/DirectoryFS ✔, E8.1b data and sources, E8.1c packages and `test_source`, E8.2 typing/threads/memory, E8.3 CLI, E8.4 wheel smoke test | | 5 |
+| 8 API, CLI, packaging (F25, F26) | in progress | E8.1a `compile`/`evaluate`, MemoryFS/DirectoryFS ✔, E8.1b variable files, bibliographies, snapshots, FX ✔, E8.1c packages and `test_source`, E8.2 typing/threads/memory, E8.3 CLI, E8.4 wheel smoke test | c14db94 (E8.1a) | 4 |
 | Cross-cutting | open | rule ledger and conformance fixtures, CI (incl. `HYPOTHESIS_PROFILE=ci`), Rust coverage, sdist fix (`include_str!("../../../spec/units.tsv")`) | | 3 |
-| **Total** | | | | **about 8** |
+| **Total** | | | | **about 7** |
 
-At the pace so far (29 commits for Epics 0–6), the remaining 8 sessions are roughly 2–4 working days; build-error rounds add to that.
+At the pace so far (29 commits for Epics 0–6), the remaining 7 sessions are roughly 2–4 working days; build-error rounds add to that.
 
 ## Open decisions
 
@@ -41,7 +41,8 @@ At the pace so far (29 commits for Epics 0–6), the remaining 8 sessions are ro
 - E8.1a (G50): paragraphs merge across removed `:::if`/`:::for` fences; insert a blank line (loop-built lists become loose) or not? Strict xfail
 - E8.1a: G26 escaper turns `7.5` at a line start into `7\.5` (renders the same); narrow it to real list markers?
 - E8.1a (G50): calc order, `document.*`/`variables` scope, imported frontmatter ignored, calc in quotes/lists refused: offered for veto
+- E8.1b (G51): declarations before inputs, inputs for source variables refused, declared units checked up front, returned metadata has files loaded and declarations replaced: offered for veto
 
 ## Next
 
-1. E8.1b: variable files (`variables: x: ./data/x.yaml`), bibliographies for citations, FX observations, source snapshots in `compile`. Then E8.1c packages and `test_source`. G16 still open.
+1. E8.1c: packages in `compile` (manifest as lowest metadata layer, `.mdq.age` with host credentials, plaintext-export permission) and the public `test_source`. Then E8.2 typing, exception hierarchy, threads, memory. G16 still open.

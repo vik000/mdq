@@ -596,6 +596,11 @@ fn parse_entry(i: usize, e: &SVal) -> Res<Entry> {
 /// transport. Returns the values in declaration order.
 pub fn snapshot_apply(text: &str, snapshot: &[SVal]) -> Res<Vec<Fetched>> {
     let decls = source::source_validate(text, 1)?;
+    snapshot_resolve(&decls, snapshot)
+}
+
+/// `snapshot_apply` for declarations that are already validated (used by `compile`).
+pub fn snapshot_resolve(decls: &[source::Declared], snapshot: &[SVal]) -> Res<Vec<Fetched>> {
     let mut entries: Vec<Entry> = Vec::new();
     for (i, e) in snapshot.iter().enumerate() {
         let en = parse_entry(i, e)?;
@@ -608,7 +613,7 @@ pub fn snapshot_apply(text: &str, snapshot: &[SVal]) -> Res<Vec<Fetched>> {
         entries.push(en);
     }
     let mut out = Vec::new();
-    for d in &decls {
+    for d in decls {
         let Some(spec) = &d.source else { continue }; // host-supplied: not the snapshot's business
         let Some(en) = entries.iter().find(|x| x.name == d.name) else {
             return Err(unresolved(format!("no snapshot entry for '{}'", d.name)));

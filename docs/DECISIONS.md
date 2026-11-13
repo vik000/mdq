@@ -22,6 +22,25 @@ Per feature. Veto by editing or telling me. Test-plan gap rows (G-numbers) in `d
 **Open**
 - Per-member encryption layout (spec gap 4): strict xfail `test_per_member_encryption_layout`.
 
+## E8.1b data and sources in compile (G51)
+**Decisions**
+- Variable files: a string directly under `variables:` is a file reference only if it starts with `./` or `../` and ends in .yaml, .yml or .json; anything else stays a plain string. The path is relative to the file that declared it (`inputs`: the root), with the usual confinement. The file must hold a mapping, which becomes the namespace (`{{project.name}}`); missing file MDQ_MISSING_IMPORT; references inside variable files are not followed.
+- Bibliographies: metadata key `bibliography:` (a path or a list of paths, Pandoc's convention), relative to the declaring file; format from the extension (.bib BibTeX, .json CSL JSON, else MDQ_UNSUPPORTED_FEATURE); missing MDQ_MISSING_IMPORT.
+- Declared variables: `compile` never fetches. A source variable takes its value from `snapshot=[...]` (E6.5 format, checked against its declaration); a host-supplied one (type, no source) from `inputs`, type-checked. Any declared variable without a value is MDQ_SOURCE_UNRESOLVED, even if the text never uses it.
+- FX: `compile` takes the E1.6 arguments (`observations`, `valuation`, `market`, `pins`).
+- Order: declarations are read from the file layers before `inputs` go on top and before variable files are loaded (so an input cannot overwrite the declaration it fills, and a data file's `type:` key is data).
+- An input for a variable that has a `source` is refused (MDQ_SOURCE_INVALID): its value must come from the snapshot.
+- A declared number shows as `"1.5 USD"` in text and is a quantity/money in calc; a unit that is neither a catalogue unit nor a currency code is refused up front (never silently invisible to calc).
+- The returned `metadata` is what the document sees: variable files loaded, declarations replaced by their values (the raw declarations are still in the source files; `values` lists them with type, unit and source).
+- E8.1a test adjusted: `test_variable_files_not_supported_yet` (the E8.1a placeholder) now checks the E8.1b rules; same name kept.
+
+**Sacrifices**
+- Only strings directly under `variables:` can be files (not deeper in a namespace).
+- Provenance for values inside a variable file points to the layer that named the file, not to the file's own lines.
+
+**Open**
+- Provenance inside variable files; scoped metadata for imports (both carried from E8.1a).
+
 ## E8.1a compile and evaluate (G50)
 **Decisions**
 - Sources are never modified: `compile`/`evaluate` read through the file-system callback and return new text and data; they write nothing (saving is the host's job).

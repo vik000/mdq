@@ -155,10 +155,13 @@ def test_reserved_namespaces(assert_mdq_error, name):
         mdq.compile("d.md", {"d.md": f"---\nvariables:\n  {name}: 1\n---\nx\n"})
 
 
-@pytest.mark.parametrize("value", ["./data/project.yaml", "../p.yml", "/abs.json", "./X.YAML"])
-def test_variable_files_not_supported_yet(assert_mdq_error, value):
-    with assert_mdq_error(UNSUP):
+# Placeholder from E8.1a ("variable files not supported yet") replaced when E8.1b implemented them (G51);
+# the full rules are tested in test_e8_f81b_data.py.
+@pytest.mark.parametrize("value,code", [("./data/project.yaml", MISSING), ("../p.yml", DENIED), ("./X.YAML", MISSING)])
+def test_variable_files_not_supported_yet(assert_mdq_error, value, code):
+    with assert_mdq_error(code):
         mdq.compile("d.md", {"d.md": f"---\nvariables:\n  project: {value}\n---\nx\n"})
+    assert md("d.md", {"d.md": "---\nvariables:\n  p: /abs.json\n---\n{{p}}\n"}) == "/abs.json\n"
 
 
 def test_variables_must_be_a_mapping(assert_mdq_error):

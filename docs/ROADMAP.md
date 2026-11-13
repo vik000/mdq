@@ -3,7 +3,7 @@
 Updated with every commit. Estimates are in sessions (one session = one feature cycle: Rust, shim check, tests,
 commit message), rough, about ±50%. Feature definitions and tests: `docs/TEST_PLAN.md` section 4.
 
-**Last update:** E8.3 CLI built natively (5330 passed, 4 strict xfails).
+**Last update:** E8.4 wheel smoke test built (5332 passed, 1 opt-in skip, 4 strict xfails); Epic 8 done.
 
 ## Status
 
@@ -18,11 +18,11 @@ commit message), rough, about ±50%. Feature definitions and tests: `docs/TEST_P
 | 5 Rich features and export (F10, F23) | done | E5.1 highlight/callout/details/columns ✔, E5.2a math/footnotes ✔ (fixes: fixed point 1f8c87b, backticks 3544e4b), E5.2b citations ✔, E5.3 TOC ✔, E5.4 `export_markdown` ✔ | | 0 |
 | 6 Sources and policy (F16–F19) | done | E6.1 declarations and URL templates ✔, E6.2 JSON Pointer and types ✔, E6.3 URL/IP classification ✔, E6.4 policy ✔, E6.5 resolver, fake transport and snapshots ✔ | | 0 |
 | 7 Packages and encryption (F20, F21) | done | E7.1 hostile-zip reader ✔, E7.2 manifest and `package_open` ✔, E7.3 age (X25519 + passphrase, pyrage-verified) ✔ | c04ca23 (E7.1), 1f8c87b (E7.2 + E5.2a fix), fd299f6 (E7.3) | 0 |
-| 8 API, CLI, packaging (F25, F26) | in progress | E8.1a `compile`/`evaluate`, MemoryFS/DirectoryFS ✔, E8.1b variable files, bibliographies, snapshots, FX ✔, E8.1c PackageFS, allow_plaintext, `validate_sources`, `test_source` ✔, E8.2 exception hierarchy, py.typed + stubs (mypy --strict, stubtest), threads, memory ✔, E8.3 CLI (build/check/sources, exit codes, JSON schema) ✔, E8.4 wheel smoke test | c14db94 (E8.1a), fa0ede4 (E8.1b), bab1932 (E8.1c), 82ca2c3 (E8.2) | 0.5 |
+| 8 API, CLI, packaging (F25, F26) | done | E8.1a `compile`/`evaluate`, MemoryFS/DirectoryFS ✔, E8.1b variable files, bibliographies, snapshots, FX ✔, E8.1c PackageFS, allow_plaintext, `validate_sources`, `test_source` ✔, E8.2 exception hierarchy, py.typed + stubs (mypy --strict, stubtest), threads, memory ✔, E8.3 CLI (build/check/sources, exit codes, JSON schema) ✔, E8.4 wheel smoke test (3.12 and 3.14 arm64; matrix in CI) ✔ | c14db94 (E8.1a), fa0ede4 (E8.1b), bab1932 (E8.1c), 82ca2c3 (E8.2), ab1c658 (E8.3) | 0 |
 | Cross-cutting | open | rule ledger and conformance fixtures, CI (incl. `HYPOTHESIS_PROFILE=ci`), Rust coverage, sdist fix (`include_str!("../../../spec/units.tsv")`) | | 3 |
-| **Total** | | | | **about 3.5** |
+| **Total** | | | | **about 3** |
 
-At the pace so far (29 commits for Epics 0–6), the remaining 3.5 sessions are roughly 2–4 working days; build-error rounds add to that.
+At the pace so far (29 commits for Epics 0–6), the remaining 3 sessions are roughly 2–4 working days; build-error rounds add to that.
 
 ## Open decisions
 
@@ -47,4 +47,9 @@ At the pace so far (29 commits for Epics 0–6), the remaining 3.5 sessions are 
 
 ## Next
 
-1. E8.4 wheel smoke test (build the wheel, install it in a clean venv, import, run `mdq` on one document; check `py.typed`, `_native.pyi` and `cli.schema.json` are in the wheel). Then the cross-cutting items (conformance fixtures + CLI parity, CI, Rust coverage, sdist fix). G16 still open.
+1. Cross-cutting, suggested order:
+   a. sdist fix (`include_str!("../../../spec/units.tsv")` reaches outside the crate, so an sdist build fails) plus an sdist smoke test; release-blocking, small.
+   b. Conformance fixtures (`conformance/cases/*.json`, the rule ledger) driving both the library and the CLI (parity).
+   c. CI: test matrix 3.9-3.13, `HYPOTHESIS_PROFILE=ci`, cibuildwheel wheels for Linux/macOS/Windows, the wheel smoke test on each.
+   d. Rust line coverage of `mdq-core` from the Python tests (target 95 %, uncovered lines reviewed).
+2. The open decisions above (several need only your answer). G16 still open.

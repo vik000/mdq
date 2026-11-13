@@ -22,6 +22,20 @@ Per feature. Veto by editing or telling me. Test-plan gap rows (G-numbers) in `d
 **Open**
 - Per-member encryption layout (spec gap 4): strict xfail `test_per_member_encryption_layout`.
 
+## E8.4 wheel smoke test (G55)
+**Decisions**
+- A standalone script (`scripts/wheel_smoke.py`) does the work, so CI can run it directly; the pytest test wraps it and is opt-in (`MDQ_WHEEL_SMOKE=1`), because a cold release build takes minutes. The cheap checks (version equals the Cargo workspace version, packaged files exist, console script declared) always run.
+- Installs use `--no-index`: the wheel has no runtime dependencies, and the check must not depend on the network.
+- Every check runs from a temporary directory outside the repo with PYTHONPATH cleared, and asserts mdq was imported from the venv, so the source tree can never mask a packaging bug.
+- An interpreter that cannot load the wheel's architecture (x86_64 Python under Rosetta on Apple Silicon) is reported as SKIP with the reason, not as a failure; testing no interpreter at all fails.
+
+**Sacrifices**
+- Locally verified only on macOS arm64 with Python 3.12 and 3.14; the 3.9-3.13 matrix and Linux/Windows wheels are left to CI (cross-cutting).
+- The sdist is not tested yet (known issue: `include_str!("../../../spec/units.tsv")` reaches outside the crate).
+
+**Open**
+- None new.
+
 ## E8.3 CLI (G54)
 **Decisions**
 - Commands: `mdq build ENTRY` (Markdown to stdout or `-o FILE`), `mdq check ENTRY` (evaluate, diagnostics only), `mdq sources ENTRY` (declarations, offline), `mdq --version`. Common options: `--root DIR` or `--package FILE` (`--identity FILE`, `--passphrase-file FILE` for .mdq.age), `--input name=value`, `--snapshot FILE.json`, `--profile`, `--calc-blocks`, `--allow-plaintext`, `--format text|json`. No network command: `test_source` stays a library call. Never writes over a source file.

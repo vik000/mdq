@@ -123,7 +123,15 @@ pub fn merge(layers: &[Layer]) -> Res<Merged> {
 
 /// `merge`, plus an optional highest layer that is already a value (host inputs in `compile`).
 pub fn merge_with_top(layers: &[Layer], top: Option<(&str, &Yaml)>) -> Res<Merged> {
+    merge_values(None, layers, top)
+}
+
+/// `merge` with optional value layers below (a package manifest) and above (host inputs).
+pub fn merge_values(bottom: Option<(&str, &Yaml)>, layers: &[Layer], top: Option<(&str, &Yaml)>) -> Res<Merged> {
     let mut root = MMap { entries: Vec::new(), index: HashMap::new(), layer: String::new() };
+    if let Some((name, Yaml::Map(entries))) = bottom {
+        root.merge(entries, name);
+    }
     for layer in layers {
         let doc = yaml::load(&layer.text, true, layer.first_line).map_err(|mut d| {
             if d.path.is_none() {
@@ -162,6 +170,11 @@ pub fn cascade(c: &Cascade) -> Res<Merged> {
 
 /// `cascade` with a value layer above the overrides (see `merge_with_top`).
 pub fn cascade_with_top(c: &Cascade, top: Option<(&str, &Yaml)>) -> Res<Merged> {
+    cascade_values(c, None, top)
+}
+
+/// `cascade` with value layers below and above (see `merge_values`).
+pub fn cascade_values(c: &Cascade, bottom: Option<(&str, &Yaml)>, top: Option<(&str, &Yaml)>) -> Res<Merged> {
     let mut layers: Vec<Layer> = Vec::new();
     if let Some(l) = &c.defaults {
         layers.push(l.clone());
@@ -179,5 +192,5 @@ pub fn cascade_with_top(c: &Cascade, top: Option<(&str, &Yaml)>) -> Res<Merged> 
     if let Some(l) = &c.overrides {
         layers.push(l.clone());
     }
-    merge_with_top(&layers, top)
+    merge_values(bottom, &layers, top)
 }

@@ -3,7 +3,7 @@
 Updated with every commit. Estimates are in sessions (one session = one feature cycle: Rust, shim check, tests,
 commit message), rough, about ±50%. Feature definitions and tests: `docs/TEST_PLAN.md` section 4.
 
-**Last update:** E8.1b data and sources in compile built natively (5238 passed, 4 strict xfails: G48, GAP-4, G38, G50).
+**Last update:** E8.1c packages in compile and the public source API built natively (5264 passed, 4 strict xfails); E8.1 done.
 
 ## Status
 
@@ -18,16 +18,16 @@ commit message), rough, about ±50%. Feature definitions and tests: `docs/TEST_P
 | 5 Rich features and export (F10, F23) | done | E5.1 highlight/callout/details/columns ✔, E5.2a math/footnotes ✔ (fixes: fixed point 1f8c87b, backticks 3544e4b), E5.2b citations ✔, E5.3 TOC ✔, E5.4 `export_markdown` ✔ | | 0 |
 | 6 Sources and policy (F16–F19) | done | E6.1 declarations and URL templates ✔, E6.2 JSON Pointer and types ✔, E6.3 URL/IP classification ✔, E6.4 policy ✔, E6.5 resolver, fake transport and snapshots ✔ | | 0 |
 | 7 Packages and encryption (F20, F21) | done | E7.1 hostile-zip reader ✔, E7.2 manifest and `package_open` ✔, E7.3 age (X25519 + passphrase, pyrage-verified) ✔ | c04ca23 (E7.1), 1f8c87b (E7.2 + E5.2a fix), fd299f6 (E7.3) | 0 |
-| 8 API, CLI, packaging (F25, F26) | in progress | E8.1a `compile`/`evaluate`, MemoryFS/DirectoryFS ✔, E8.1b variable files, bibliographies, snapshots, FX ✔, E8.1c packages and `test_source`, E8.2 typing/threads/memory, E8.3 CLI, E8.4 wheel smoke test | c14db94 (E8.1a) | 4 |
+| 8 API, CLI, packaging (F25, F26) | in progress | E8.1a `compile`/`evaluate`, MemoryFS/DirectoryFS ✔, E8.1b variable files, bibliographies, snapshots, FX ✔, E8.1c PackageFS, allow_plaintext, `validate_sources`, `test_source` ✔, E8.2 typing/threads/memory, E8.3 CLI, E8.4 wheel smoke test | c14db94 (E8.1a), fa0ede4 (E8.1b) | 3 |
 | Cross-cutting | open | rule ledger and conformance fixtures, CI (incl. `HYPOTHESIS_PROFILE=ci`), Rust coverage, sdist fix (`include_str!("../../../spec/units.tsv")`) | | 3 |
-| **Total** | | | | **about 7** |
+| **Total** | | | | **about 6** |
 
-At the pace so far (29 commits for Epics 0–6), the remaining 7 sessions are roughly 2–4 working days; build-error rounds add to that.
+At the pace so far (29 commits for Epics 0–6), the remaining 6 sessions are roughly 2–4 working days; build-error rounds add to that.
 
 ## Open decisions
 
 - G10 resolved in G44 (CGNAT blocked)
-- G16: ISO 4217 list or any 3-capital currency code (no longer blocks E6; blocks unit/currency validation in E8.1)
+- G16: ISO 4217 list or any 3-capital currency code. Current behaviour everywhere (lexer, declared units in E8.1b): any 3 capitals is a currency; a real ISO list would only narrow it
 - G24 / G25: offered for veto
 - Per-member encryption layout (spec gap 4): strict xfail in `test_e7_f73_age.py`
 - MDZip (F22): deferred by the spec
@@ -37,12 +37,12 @@ At the pace so far (29 commits for Epics 0–6), the remaining 7 sessions are ro
 - E5.2a (G38): maths touching a backtick is now refused (MDQ_UNSUPPORTED_FEATURE): offered for veto
 - E5.2a (G38): maths overlapping a code span (`` $`$` ``): Pandoc vs CommonMark, which wins? Current: maths (strict xfail)
 - E7.3 (G49): RustCrypto primitives + own age format, host-supplied randomness, X25519 + passphrase (scrypt cap log2 N <= 20), explicit decrypt API: offered for veto
-- E8.1: plaintext export of a decrypted package needs explicit permission (moved from E7.3; E8.1c)
 - E8.1a (G50): paragraphs merge across removed `:::if`/`:::for` fences; insert a blank line (loop-built lists become loose) or not? Strict xfail
 - E8.1a: G26 escaper turns `7.5` at a line start into `7\.5` (renders the same); narrow it to real list markers?
 - E8.1a (G50): calc order, `document.*`/`variables` scope, imported frontmatter ignored, calc in quotes/lists refused: offered for veto
+- E8.1c (G52): document requests compose most-restrictively across manifest and metadata files; `allow_plaintext` per call; `evaluate` of encrypted packages allowed: offered for veto
 - E8.1b (G51): declarations before inputs, inputs for source variables refused, declared units checked up front, returned metadata has files loaded and declarations replaced: offered for veto
 
 ## Next
 
-1. E8.1c: packages in `compile` (manifest as lowest metadata layer, `.mdq.age` with host credentials, plaintext-export permission) and the public `test_source`. Then E8.2 typing, exception hierarchy, threads, memory. G16 still open.
+1. E8.2: exception hierarchy under `MdqError`, `py.typed` + `.pyi` stubs (mypy --strict, stubtest), Decimal fidelity, thread safety (8 threads), memory (10,000 compiles). Then E8.3 CLI, E8.4 wheel smoke test. G16 still open.

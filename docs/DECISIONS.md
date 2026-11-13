@@ -22,6 +22,24 @@ Per feature. Veto by editing or telling me. Test-plan gap rows (G-numbers) in `d
 **Open**
 - Per-member encryption layout (spec gap 4): strict xfail `test_per_member_encryption_layout`.
 
+## E8.1c packages in compile and the public source API (G52)
+**Decisions**
+- Packages: `pkg = mdq.PackageFS(data, identities=None, passphrase=None, limits=None)` opens and checks the package (E7.1-E7.3); `mdq.compile(pkg)` compiles its entrypoint (`entry` optional). The manifest's metadata is the lowest layer (under the root `.mdq.yaml`); its `security`/`requirements` are requests only (E6.4). Works with `evaluate` and every option.
+- Plaintext: compiling a package opened from `.mdq.age` is MDQ_SECURITY_DENIED unless `compile(..., allow_plaintext=True)`; `evaluate` is allowed (the host holds the keys and chose to decrypt); a plain `.mdq` needs no permission.
+- Sources: `mdq.validate_sources(entry, fs)` lists the declarations of the document's effective metadata offline; `mdq.test_source(entry, fs, name, *, host_policy, library_policy, transport, retrieved_at, allow_network=True)` performs one retrieval (E6.5) and returns a snapshot entry for `compile(snapshot=[...])`.
+- Policy: two trusted dicts (`host_policy`, `library_policy`); the document's requests (manifest and every metadata layer) are applied automatically; network denied unless both trusted layers allow (E6.4).
+- Several document request layers compose most-restrictively (new `policy_intersect_docs`): a later layer (sidecar, frontmatter) can never widen what an earlier one (manifest, `.mdq.yaml`) narrowed, unlike ordinary metadata, which cascades by precedence.
+- Requests in metadata files use the strict G45 spelling (`security.network: request|none`); only the manifest also accepts `deny` (G48).
+- The manifest's `features` are checked when the package opens (G48), not again as metadata.
+- `PackageFS` detects age data itself (`age_is`); credentials are used only for age data.
+- The public `test_source` is marked `__test__ = False` so pytest never collects it.
+
+**Sacrifices**
+- `allow_plaintext` is a per-call flag; there is no policy object for it yet.
+
+**Open**
+- None new.
+
 ## E8.1b data and sources in compile (G51)
 **Decisions**
 - Variable files: a string directly under `variables:` is a file reference only if it starts with `./` or `../` and ends in .yaml, .yml or .json; anything else stays a plain string. The path is relative to the file that declared it (`inputs`: the root), with the usual confinement. The file must hold a mapping, which becomes the namespace (`{{project.name}}`); missing file MDQ_MISSING_IMPORT; references inside variable files are not followed.

@@ -844,6 +844,10 @@ fn source_dict<'py>(py: Python<'py>, s: source::Source) -> PyResult<Bound<'py, P
 #[pyo3(signature = (text, first_line=1))]
 fn source_validate<'py>(py: Python<'py>, text: &str, first_line: u32) -> PyResult<Bound<'py, PyList>> {
     let decls = wrap(py, source::source_validate(text, first_line))?;
+    decls_list(py, decls)
+}
+
+fn decls_list<'py>(py: Python<'py>, decls: Vec<source::Declared>) -> PyResult<Bound<'py, PyList>> {
     let list = PyList::empty(py);
     for v in decls {
         let d = PyDict::new(py);
@@ -1736,7 +1740,8 @@ fn calc_value_dict<'py>(py: Python<'py>, r: &mdq_core::calc::eval::EvalResult, d
 #[pyfunction]
 #[pyo3(signature = (entry, read, inputs=None, profile="commonmark", keep_calc=false, markdown=true,
                     max_iterations=10000, max_depth=64, max_expansions=10000, max_bytes=16777216,
-                    snapshot=None, observations=None, valuation=None, market=None, pins=None))]
+                    snapshot=None, observations=None, valuation=None, market=None, pins=None,
+                    package=None, allow_plaintext=false))]
 #[allow(clippy::too_many_arguments)]
 fn compile_document<'py>(
     py: Python<'py>,
@@ -1755,6 +1760,8 @@ fn compile_document<'py>(
     valuation: Option<String>,
     market: Option<String>,
     pins: Option<std::collections::HashMap<String, std::collections::HashMap<String, String>>>,
+    package: Option<&Bound<'py, PyAny>>,
+    allow_plaintext: bool,
 ) -> PyResult<Bound<'py, PyDict>> {
     if !read.is_callable() {
         return Err(PyTypeError::new_err("read must be callable"));
@@ -1785,32 +1792,15 @@ fn compile_document<'py>(
         }
     };
     let failure: std::cell::RefCell<Option<PyErr>> = std::cell::RefCell::new(None);
-    let mut reader = |p: &str| -> Result<Option<Vec<u8>>, Diagnostic> {
-        let sentinel = || Diagnostic::new(mdq_core::diag::Code::SourceFetchFailed, "read callback failed");
-        match read.call1((p,)) {
-            Err(e) => {
-                *failure.borrow_mut() = Some(e);
-                Err(sentinel())
-            }
-            Ok(v) if v.is_none() => Ok(None),
-            Ok(v) => {
-                if let Ok(b) = v.downcast::<PyBytes>() {
-                    Ok(Some(b.as_bytes().to_vec()))
-                } else if let Ok(s) = v.downcast::<PyString>() {
-                    Ok(Some(s.to_string().into_bytes()))
-                } else {
-                    *failure.borrow_mut() = Some(PyTypeError::new_err("read() must return bytes, str or None"));
-                    Err(sentinel())
-                }
-            }
-        }
-    };
+    let mut reader = py_reader(read, &failure);
     let opts = compile::Options {
         profile: prof,
         keep_calc,
         markdown,
         imports: imports::Limits { max_depth, max_expansions, max_bytes, rebase_links: true, footnotes: true },
         max_iterations,
+        package: package_arg(py, package)?,
+        allow_plaintext,
     };
     let res = compile::compile(entry, &mut reader, &inputs_yaml, &snap, &fx_ctx, &opts);
     if let Some(e) = failure.borrow_mut().take() {
@@ -1863,6 +1853,124 @@ fn compile_document<'py>(
     }
     out.set_item("values", values)?;
     Ok(out)
+}
+
+/// A core reader over a Python `read(path)` callable: bytes, str or None; an exception is kept in
+/// `failure` (and re-raised unchanged by the caller), another return type becomes TypeError.
+fn py_reader<'a, 'py>(
+    read: &'a Bound<'py, PyAny>,
+    failure: &'a std::cell::RefCell<Option<PyErr>>,
+) -> impl FnMut(&str) -> Result<Option<Vec<u8>>, Diagnostic> + 'a {
+    move |p: &str| {
+        let sentinel = || Diagnostic::new(mdq_core::diag::Code::SourceFetchFailed, "read callback failed");
+        match read.call1((p,)) {
+            Err(e) => {
+                *failure.borrow_mut() = Some(e);
+                Err(sentinel())
+            }
+            Ok(v) if v.is_none() => Ok(None),
+            Ok(v) => {
+                if let Ok(b) = v.downcast::<PyBytes>() {
+                    Ok(Some(b.as_bytes().to_vec()))
+                } else if let Ok(s) = v.downcast::<PyString>() {
+                    Ok(Some(s.to_string().into_bytes()))
+                } else {
+                    *failure.borrow_mut() = Some(PyTypeError::new_err("read() must return bytes, str or None"));
+                    Err(sentinel())
+                }
+            }
+        }
+    }
+}
+
+/// `package` = None or {"metadata": dict, "requests": dict, "encrypted": bool} (built by PackageFS).
+fn package_arg(py: Python<'_>, package: Option<&Bound<'_, PyAny>>) -> PyResult<Option<compile::PackageInfo>> {
+    let Some(p) = package.filter(|p| !p.is_none()) else { return Ok(None) };
+    let d = p.downcast::<PyDict>().map_err(|_| PyTypeError::new_err("package must be a dict"))?;
+    let item = |k: &str| -> PyResult<Bound<'_, PyAny>> {
+        d.get_item(k)?.ok_or_else(|| PyTypeError::new_err(format!("package needs '{k}'")))
+    };
+    let metadata = py_to_yaml(py, &item("metadata")?, 0)?;
+    let requests = to_map(item("requests")?.downcast::<PyDict>().map_err(|_| PyTypeError::new_err("package requests must be a dict"))?)?;
+    let encrypted: bool = item("encrypted")?.extract()?;
+    Ok(Some(compile::PackageInfo { metadata, requests, encrypted }))
+}
+
+/// Internal: the declarations of a document's effective metadata (offline).
+#[pyfunction]
+#[pyo3(signature = (entry, read, package=None))]
+fn validate_document_sources<'py>(
+    py: Python<'py>,
+    entry: &str,
+    read: &Bound<'py, PyAny>,
+    package: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyList>> {
+    if !read.is_callable() {
+        return Err(PyTypeError::new_err("read must be callable"));
+    }
+    let pkg = package_arg(py, package)?;
+    let failure = std::cell::RefCell::new(None);
+    let mut reader = py_reader(read, &failure);
+    let res = compile::validate_sources(entry, &mut reader, pkg.as_ref());
+    if let Some(e) = failure.borrow_mut().take() {
+        return Err(e);
+    }
+    decls_list(py, wrap(py, res)?)
+}
+
+/// Internal: one authorised retrieval of a document's declared variable (public `test_source`).
+#[pyfunction]
+#[pyo3(signature = (entry, read, name, host_policy, library_policy, transport, retrieved_at,
+                    allow_network=true, headers=None, package=None))]
+#[allow(clippy::too_many_arguments)]
+fn test_document_source<'py>(
+    py: Python<'py>,
+    entry: &str,
+    read: &Bound<'py, PyAny>,
+    name: &str,
+    host_policy: Option<&Bound<'py, PyAny>>,
+    library_policy: Option<&Bound<'py, PyAny>>,
+    transport: &Bound<'py, PyAny>,
+    retrieved_at: &str,
+    allow_network: bool,
+    headers: Option<&Bound<'py, PyAny>>,
+    package: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyDict>> {
+    if !read.is_callable() {
+        return Err(PyTypeError::new_err("read must be callable"));
+    }
+    if !transport.is_callable() {
+        return Err(PyTypeError::new_err("transport must be callable"));
+    }
+    let h = layer_arg(host_policy, "a policy layer")?;
+    let l = layer_arg(library_policy, "a policy layer")?;
+    let hdrs = match headers {
+        None => Vec::new(),
+        Some(x) if x.is_none() => Vec::new(),
+        Some(x) => str_pairs(x).ok_or_else(|| PyTypeError::new_err("headers must be a dict of str to str"))?,
+    };
+    let pkg = package_arg(py, package)?;
+    let failure = std::cell::RefCell::new(None);
+    let mut reader = py_reader(read, &failure);
+    let mut t = PyTransport { f: transport.clone(), fatal: None };
+    let r = compile::test_source(entry, &mut reader, pkg.as_ref(), name, h.as_deref(), l.as_deref(), &mut t, retrieved_at, allow_network, &hdrs);
+    if let Some(e) = failure.borrow_mut().take() {
+        return Err(e);
+    }
+    if let Some(e) = t.fatal.take() {
+        return Err(e);
+    }
+    match r {
+        Ok(f) => fetched_dict(py, f, true),
+        Err(resolver::FetchError::Arg(msg)) => Err(PyValueError::new_err(msg)),
+        Err(resolver::FetchError::Diag(d)) => Err(to_py_err(py, d)),
+    }
+}
+
+/// Internal: does `data` look like an age file (binary or armored)?
+#[pyfunction]
+fn age_is(data: &[u8]) -> bool {
+    age::is_age(data)
 }
 
 /// Internal: profiles this build implements.
@@ -1953,6 +2061,9 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(age_identity, &internal)?)?;
     internal.add_function(wrap_pyfunction!(package_open_age, &internal)?)?;
     internal.add_function(wrap_pyfunction!(compile_document, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(validate_document_sources, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(test_document_source, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(age_is, &internal)?)?;
     internal.add_function(wrap_pyfunction!(attrs_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_eval, &internal)?)?;

@@ -189,3 +189,6 @@ age_identity = _i.age_identity
 
 # E8.1a compile pipeline (the public API is mdq.compile / mdq.evaluate)
 compile_document = _i.compile_document
+validate_document_sources = _i.validate_document_sources
+test_document_source = _i.test_document_source
+age_is = _i.age_is

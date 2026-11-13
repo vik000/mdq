@@ -31,10 +31,12 @@ use crate::export::{export_markdown, Profile};
 use crate::frontmatter;
 use crate::fx::FxContext;
 use crate::imports::{import_expand, Expanded, Limits};
-use crate::meta::{cascade_with_top, Cascade, Layer};
+use crate::meta::{cascade_values, Cascade, Layer, Merged};
 use crate::paths::path_normalise;
 use crate::refs::strip_block_ids;
-use crate::resolver::SVal;
+use crate::policy::{self, PVal};
+use crate::resolver::{self, FetchError, Fetched, SVal, Transport};
+use crate::source::Declared;
 use crate::utf8;
 use crate::vars::interpolate;
 use crate::version::{check_required, SYNTAX_VERSION};
@@ -46,7 +48,18 @@ type Res<T> = Result<T, Diagnostic>;
 /// The host's file reader: the bytes of a root-relative path, or `None` if it does not exist.
 pub type Read<'a> = &'a mut dyn FnMut(&str) -> Res<Option<Vec<u8>>>;
 
-#[derive(Clone, Copy)]
+/// What `compile` needs to know about a package (E7.2/E7.3), when the files come from one.
+#[derive(Clone, Debug)]
+pub struct PackageInfo {
+    /// The manifest's shared metadata (every key but the package keys): the lowest layer.
+    pub metadata: Yaml,
+    /// The manifest's `security`/`requirements` as an E6.4 document request layer.
+    pub requests: Vec<(String, PVal)>,
+    /// Opened from `.mdq.age`: compiled Markdown is plaintext and needs the host's permission.
+    pub encrypted: bool,
+}
+
+#[derive(Clone)]
 pub struct Options {
     pub profile: Profile,
     /// Keep ```calc blocks in the Markdown output (they are always evaluated and reported).
@@ -55,11 +68,22 @@ pub struct Options {
     pub markdown: bool,
     pub imports: Limits,
     pub max_iterations: usize,
+    pub package: Option<PackageInfo>,
+    /// The host allows plaintext output of an encrypted package.
+    pub allow_plaintext: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { profile: Profile::CommonMark, keep_calc: false, markdown: true, imports: Limits::default(), max_iterations: 10_000 }
+        Options {
+            profile: Profile::CommonMark,
+            keep_calc: false,
+            markdown: true,
+            imports: Limits::default(),
+            max_iterations: 10_000,
+            package: None,
+            allow_plaintext: false,
+        }
     }
 }
 
@@ -284,38 +308,18 @@ fn remap(ex: &Expanded, mut d: Diagnostic) -> Diagnostic {
 
 /// Compile (or, with `opts.markdown = false`, only evaluate) the document at `entry`.
 pub fn compile(entry: &str, read: Read<'_>, inputs: &Yaml, snapshot: &[SVal], fx: &FxContext, opts: &Options) -> Res<Compiled> {
-    let entry = path_normalise("", entry)?;
-    let text = read_text(read, &entry)?.ok_or_else(|| {
-        in_file(Diagnostic::new(Code::MissingImport, "the entry file does not exist"), &entry)
-    })?;
-    let sp = frontmatter::split(&text).map_err(|d| in_file(d, &entry))?;
-
-    // 2. metadata cascade
-    let dir = dir_of(&entry).to_string();
-    let mut cas = Cascade::default();
-    if let Some(t) = read_text(read, ".mdq.yaml")? {
-        cas.project = Some(Layer::new(".mdq.yaml", &t, 1));
+    if opts.markdown && !opts.allow_plaintext && opts.package.as_ref().is_some_and(|p| p.encrypted) {
+        return Err(Diagnostic::new(
+            Code::SecurityDenied,
+            "compiling an encrypted package produces plaintext: the host must allow it (allow_plaintext)",
+        ));
     }
-    let mut acc = String::new();
-    for seg in dir.split('/').filter(|s| !s.is_empty()) {
-        acc = join(&acc, seg);
-        let p = join(&acc, ".mdq.yaml");
-        if let Some(t) = read_text(read, &p)? {
-            cas.directories.push(Layer::new(&p, &t, 1));
-        }
-    }
-    if let Some(fm) = &sp.frontmatter {
-        cas.frontmatter = Some(Layer::new(&entry, fm, sp.frontmatter_line));
-    }
-    let file = entry.rsplit('/').next().unwrap_or(&entry);
-    let stem = file.rfind('.').map(|i| &file[..i]).unwrap_or(file);
-    let sidecar = join(&dir, &format!("{}.meta.yaml", stem));
-    if let Some(t) = read_text(read, &sidecar)? {
-        cas.sidecar = Some(Layer::new(&sidecar, &t, 1));
-    }
+    let g = gather(entry, read, opts.package.as_ref())?;
+    let (entry, text, cas, bottom) = (g.entry, g.text, g.cas, g.bottom);
+    let bottom_ref = bottom.as_ref().map(|b| ("manifest.yaml", b));
     // Declarations come from the files only: an input layered on top would replace the
     // declaration it is meant to fill. Inputs for declared variables are taken out first.
-    let files_only = cascade_with_top(&cas, None)?;
+    let files_only = cascade_values(&cas, bottom_ref, None)?;
     if !matches!(get(&files_only.value, "variables"), None | Some(Yaml::Null) | Some(Yaml::Map(_))) {
         return Err(meta_err("variables must be a mapping"));
     }
@@ -326,7 +330,7 @@ pub fn compile(entry: &str, read: Read<'_>, inputs: &Yaml, snapshot: &[SVal], fx
         Yaml::Map(e) if !e.is_empty() => Some(Yaml::Map(vec![("variables".to_string(), rest.clone())])),
         _ => None,
     };
-    let merged = cascade_with_top(&cas, top.as_ref().map(|t| ("<inputs>", t)))?;
+    let merged = cascade_values(&cas, bottom_ref, top.as_ref().map(|t| ("<inputs>", t)))?;
     check_versions(&merged.value)?;
     let values = data::resolve(&decls, snapshot, &host_values)?;
     check_units(&values)?;
@@ -412,6 +416,125 @@ pub fn compile(entry: &str, read: Read<'_>, inputs: &Yaml, snapshot: &[SVal], fx
         None
     };
     Ok(Compiled { markdown, metadata: effective, provenance: merged.provenance, calc: blocks, values })
+}
+
+/// The entry file and its metadata layers (step 1 and the file part of step 2).
+struct Gathered {
+    entry: String,
+    text: String,
+    cas: Cascade,
+    /// The package manifest's metadata (the lowest layer), if any.
+    bottom: Option<Yaml>,
+}
+
+fn gather(entry: &str, read: Read<'_>, package: Option<&PackageInfo>) -> Res<Gathered> {
+    let entry = path_normalise("", entry)?;
+    let text = read_text(read, &entry)?.ok_or_else(|| {
+        in_file(Diagnostic::new(Code::MissingImport, "the entry file does not exist"), &entry)
+    })?;
+    let sp = frontmatter::split(&text).map_err(|d| in_file(d, &entry))?;
+
+    // 2. metadata cascade
+    let dir = dir_of(&entry).to_string();
+    let mut cas = Cascade::default();
+    if let Some(t) = read_text(read, ".mdq.yaml")? {
+        cas.project = Some(Layer::new(".mdq.yaml", &t, 1));
+    }
+    let mut acc = String::new();
+    for seg in dir.split('/').filter(|s| !s.is_empty()) {
+        acc = join(&acc, seg);
+        let p = join(&acc, ".mdq.yaml");
+        if let Some(t) = read_text(read, &p)? {
+            cas.directories.push(Layer::new(&p, &t, 1));
+        }
+    }
+    if let Some(fm) = &sp.frontmatter {
+        cas.frontmatter = Some(Layer::new(&entry, fm, sp.frontmatter_line));
+    }
+    let file = entry.rsplit('/').next().unwrap_or(&entry);
+    let stem = file.rfind('.').map(|i| &file[..i]).unwrap_or(file);
+    let sidecar = join(&dir, &format!("{}.meta.yaml", stem));
+    if let Some(t) = read_text(read, &sidecar)? {
+        cas.sidecar = Some(Layer::new(&sidecar, &t, 1));
+    }
+    let bottom = package.map(|p| p.metadata.clone()).filter(|m| matches!(m, Yaml::Map(e) if !e.is_empty()));
+    Ok(Gathered { entry, text, cas, bottom })
+}
+
+/// The effective metadata of the files (manifest, `.mdq.yaml`, frontmatter, sidecar; no inputs).
+fn files_metadata(g: &Gathered) -> Res<Merged> {
+    cascade_values(&g.cas, g.bottom.as_ref().map(|b| ("manifest.yaml", b)), None)
+}
+
+/// Every declared variable of the document, checked offline (spec 3 `validate_source`).
+pub fn validate_sources(entry: &str, read: Read<'_>, package: Option<&PackageInfo>) -> Res<Vec<Declared>> {
+    let g = gather(entry, read, package)?;
+    let m = files_metadata(&g)?;
+    if !matches!(get(&m.value, "variables"), None | Some(Yaml::Null) | Some(Yaml::Map(_))) {
+        return Err(meta_err("variables must be a mapping"));
+    }
+    data::declarations(&m.value, &m.provenance)
+}
+
+/// The document's network requests: the manifest's, then `requirements`/`security` of every
+/// metadata file. They are combined most-restrictively by `policy_intersect_docs`.
+fn document_requests(g: &Gathered, package: Option<&PackageInfo>) -> Res<Vec<Vec<(String, PVal)>>> {
+    let mut out = Vec::new();
+    if let Some(p) = package {
+        out.push(p.requests.clone());
+    }
+    let layers = g.cas.project.iter().chain(g.cas.directories.iter()).chain(g.cas.frontmatter.iter()).chain(g.cas.sidecar.iter());
+    for l in layers {
+        let doc = crate::yaml::load(&l.text, true, l.first_line).map_err(|d| in_file(d, &l.name))?;
+        let mut req = Vec::new();
+        for key in ["requirements", "security"] {
+            if let Some(v) = get(&doc, key) {
+                req.push((key.to_string(), to_pval(v)));
+            }
+        }
+        if !req.is_empty() {
+            // Validate this layer on its own so an error names its file.
+            policy::policy_intersect(None, None, Some(&req)).map_err(|d| in_file(d, &l.name))?;
+            out.push(req);
+        }
+    }
+    Ok(out)
+}
+
+fn to_pval(v: &Yaml) -> PVal {
+    match v {
+        Yaml::Null => PVal::None,
+        Yaml::Bool(b) => PVal::Bool(*b),
+        Yaml::Number(n) => n.parse::<i64>().map(PVal::Int).unwrap_or(PVal::Other),
+        Yaml::Str(s) => PVal::Str(s.clone()),
+        Yaml::Seq(items) => PVal::List(items.iter().map(to_pval).collect()),
+        Yaml::Map(e) => PVal::Map(e.iter().map(|(k, v)| (k.clone(), to_pval(v))).collect()),
+    }
+}
+
+/// One authorised retrieval of a declared variable of the document (spec 3 `test_source`).
+/// The policy is the intersection of the two trusted layers and every document request; the
+/// result is a snapshot entry for `compile`.
+#[allow(clippy::too_many_arguments)]
+pub fn test_source(
+    entry: &str,
+    read: Read<'_>,
+    package: Option<&PackageInfo>,
+    name: &str,
+    host: Option<&[(String, PVal)]>,
+    library: Option<&[(String, PVal)]>,
+    t: &mut dyn Transport,
+    retrieved_at: &str,
+    allow_network: bool,
+    headers: &[(String, String)],
+) -> Result<Fetched, FetchError> {
+    let g = gather(entry, read, package)?;
+    let m = files_metadata(&g)?;
+    let reqs = document_requests(&g, package)?;
+    let docs: Vec<&[(String, PVal)]> = reqs.iter().map(|r| r.as_slice()).collect();
+    let eff = policy::policy_intersect_docs(host, library, &docs)?;
+    let map = policy::effective_map(&eff);
+    resolver::source_fetch_value(&m.value, name, &map, t, retrieved_at, allow_network, headers)
 }
 
 /// The 1-based line of the opening fence of the ONE calc block in `original` whose content is

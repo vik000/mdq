@@ -15,7 +15,8 @@ from typing import Any, Callable, Mapping, Optional, Tuple, Union
 from mdq import _internal as _i
 from mdq._native import MdqError
 
-__all__ = ["MemoryFS", "DirectoryFS", "CalcValue", "CalcBlock", "DeclaredValue", "Result", "Evaluation", "compile", "evaluate"]
+__all__ = ["MemoryFS", "DirectoryFS", "PackageFS", "CalcValue", "CalcBlock", "DeclaredValue", "SourceDeclaration",
+           "Result", "Evaluation", "compile", "evaluate", "validate_sources", "test_source"]
 
 
 class MemoryFS:
@@ -54,6 +55,36 @@ class DirectoryFS:
             raise
         with open(real, "rb") as f:
             return f.read()
+
+
+class PackageFS:
+    """The files of a `.mdq` package, or of a whole-package encrypted `.mdq.age` (decrypted with the
+    host's `identities` / `passphrase`). Opening checks everything (hostile zip, manifest, entrypoint) and
+    never fetches. Read-only; `mdq.compile(pkg)` compiles the entrypoint."""
+
+    def __init__(self, data: bytes, *, identities: Optional[list] = None, passphrase: Optional[str] = None,
+                 limits: Optional[Mapping[str, int]] = None, max_work_factor: int = 20):
+        if not isinstance(data, bytes):
+            raise TypeError("PackageFS takes the package as bytes")
+        self.encrypted: bool = _i.age_is(data)
+        if self.encrypted:
+            p = _i.package_open_age(data, identities, passphrase, limits, max_work_factor)
+        else:
+            p = _i.package_open(data, limits)
+        self.manifest = {k: p[k] for k in ("format", "version", "entrypoint", "features")}
+        self.entrypoint: str = p["entrypoint_member"]
+        self.metadata: dict = p["metadata"]
+        self.requests: dict = p["requests"]
+        self.files: Tuple[str, ...] = tuple(p["files"])
+        self.directories: Tuple[str, ...] = tuple(p["directories"])
+        # Member names are unique in NFC (E7.1); look paths up the same way.
+        self._by_id = {_i.path_identity(n): d for n, d in p["files"].items()}
+
+    def read(self, path: str) -> Optional[bytes]:
+        return self._by_id.get(_i.path_identity(path))
+
+    def _info(self) -> dict:
+        return {"metadata": self.metadata, "requests": self.requests, "encrypted": self.encrypted}
 
 
 @dataclass(frozen=True)
@@ -101,6 +132,16 @@ class Result(Evaluation):
     markdown: str = ""
 
 
+@dataclass(frozen=True)
+class SourceDeclaration:
+    """A declared variable (E6.1), checked offline."""
+    name: str
+    type: str
+    unit: Optional[str]
+    source: Optional[dict]  # None = host-supplied
+    url: Optional[str]  # http sources: the URL with its arguments filled in
+
+
 _LIMITS = ("max_iterations", "max_depth", "max_expansions", "max_bytes")
 
 
@@ -138,11 +179,23 @@ def _limits(limits: Optional[Mapping[str, int]]) -> dict:
     return out
 
 
+def _target(entry, fs):
+    """(entry, fs, package info): `compile(pkg)` and `compile(None, pkg)` use the package's entrypoint."""
+    if fs is None and isinstance(entry, PackageFS):
+        entry, fs = None, entry
+    if isinstance(fs, PackageFS):
+        return (fs.entrypoint if entry is None else _entry(entry)), fs, fs._info()
+    if fs is None:
+        raise TypeError("fs is required (a MemoryFS, DirectoryFS, PackageFS, dict, or object with read(path))")
+    return _entry(entry), fs, None
+
+
 def _run(entry, fs, inputs, limits, data, **kw) -> dict:
     if inputs is not None and not isinstance(inputs, Mapping):
         raise TypeError("inputs must be a dict")
-    return _i.compile_document(_entry(entry), _reader(fs), dict(inputs) if inputs is not None else None,
-                               **kw, **_limits(limits), **data)
+    entry, fs, package = _target(entry, fs)
+    return _i.compile_document(entry, _reader(fs), dict(inputs) if inputs is not None else None,
+                               **kw, **_limits(limits), **data, package=package)
 
 
 def _data(snapshot, observations, valuation, market, pins) -> dict:
@@ -157,8 +210,8 @@ def _blocks(raw) -> Tuple[CalcBlock, ...]:
     return tuple(CalcBlock(b["path"], b["line"], b["source"], tuple(CalcValue(**v) for v in b["results"])) for b in raw)
 
 
-def compile(entry, fs, *, inputs: Optional[Mapping[str, Any]] = None, profile: str = "commonmark",
-            calc_blocks: str = "remove", limits: Optional[Mapping[str, int]] = None,
+def compile(entry, fs=None, *, inputs: Optional[Mapping[str, Any]] = None, profile: str = "commonmark",
+            calc_blocks: str = "remove", limits: Optional[Mapping[str, int]] = None, allow_plaintext: bool = False,
             snapshot: Optional[list] = None, observations: Optional[list] = None, valuation: Optional[str] = None,
             market: Optional[str] = None, pins: Optional[Mapping[str, Mapping[str, str]]] = None) -> Result:
     """Compile the document `entry` (root-relative) read from `fs` into portable Markdown.
@@ -168,18 +221,47 @@ def compile(entry, fs, *, inputs: Optional[Mapping[str, Any]] = None, profile: s
     values for declared source variables (never fetched here). `observations`/`valuation`/`market`/`pins`
     are FX data for currency conversions in calc. `calc_blocks="remove"` leaves ```calc blocks out of the
     output, `"keep"` keeps their source; their results are always in `Result.calc`.
+    `compile(pkg)` compiles a PackageFS's entrypoint; an encrypted package needs `allow_plaintext=True`.
     """
     if calc_blocks not in ("remove", "keep"):
         raise ValueError("calc_blocks must be 'remove' or 'keep'")
+    if not isinstance(allow_plaintext, bool):
+        raise TypeError("allow_plaintext must be a bool")
     r = _run(entry, fs, inputs, limits, _data(snapshot, observations, valuation, market, pins),
-             profile=profile, keep_calc=calc_blocks == "keep", markdown=True)
+             profile=profile, keep_calc=calc_blocks == "keep", markdown=True, allow_plaintext=allow_plaintext)
     return Result(r["metadata"], tuple(map(tuple, r["provenance"])), _blocks(r["calc"]), _values(r["values"]),
                   r["markdown"])
 
 
-def evaluate(entry, fs, *, inputs: Optional[Mapping[str, Any]] = None, limits: Optional[Mapping[str, int]] = None,
+def evaluate(entry, fs=None, *, inputs: Optional[Mapping[str, Any]] = None, limits: Optional[Mapping[str, int]] = None,
              snapshot: Optional[list] = None, observations: Optional[list] = None, valuation: Optional[str] = None,
              market: Optional[str] = None, pins: Optional[Mapping[str, Mapping[str, str]]] = None) -> Evaluation:
     """Like `compile`, but returns only the data (metadata, calc results, declared values); no Markdown."""
     r = _run(entry, fs, inputs, limits, _data(snapshot, observations, valuation, market, pins), markdown=False)
     return Evaluation(r["metadata"], tuple(map(tuple, r["provenance"])), _blocks(r["calc"]), _values(r["values"]))
+
+
+def validate_sources(entry, fs=None) -> Tuple[SourceDeclaration, ...]:
+    """Every declared variable of the document's effective metadata (manifest and all metadata files),
+    checked offline: schema, URL form, type and selection syntax. No I/O beyond reading the files."""
+    entry, fs, package = _target(entry, fs)
+    return tuple(SourceDeclaration(**d) for d in _i.validate_document_sources(entry, _reader(fs), package))
+
+
+def test_source(entry, fs=None, *, name: str, transport: Callable[[dict], dict], retrieved_at: str,
+                host_policy: Optional[dict] = None, library_policy: Optional[dict] = None,
+                allow_network: bool = True, headers: Optional[Mapping[str, str]] = None) -> dict:
+    """One authorised retrieval of the declared variable `name` through the host's `transport` (E6.5).
+
+    The network is allowed only if BOTH `host_policy` and `library_policy` say so; the document's requests
+    (manifest, metadata files) can only narrow that. Returns a snapshot entry for `compile(snapshot=[...])`.
+    `retrieved_at` is supplied by the host (`YYYY-MM-DDTHH:MM:SSZ`); the library never reads the clock.
+    """
+    if not isinstance(name, str):
+        raise TypeError("name must be a str")
+    entry, fs, package = _target(entry, fs)
+    return _i.test_document_source(entry, _reader(fs), name, host_policy, library_policy, transport, retrieved_at,
+                                   allow_network, headers, package)
+
+
+test_source.__test__ = False  # not a pytest test, despite the name

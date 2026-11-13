@@ -369,7 +369,26 @@ pub fn source_fetch(
     if let Some(why) = headers_check(headers) {
         return Err(FetchError::Arg(why));
     }
-    let decls = source::source_validate(text, 1)?;
+    source_fetch_value(&crate::yaml::load(text, true, 1)?, name, policy, t, retrieved_at, allow_network, headers)
+}
+
+/// `source_fetch` on already-loaded effective metadata (used by the public `test_source`).
+pub fn source_fetch_value(
+    meta: &crate::yaml::Yaml,
+    name: &str,
+    policy: &Map,
+    t: &mut dyn Transport,
+    retrieved_at: &str,
+    allow_network: bool,
+    headers: &[(String, String)],
+) -> Result<Fetched, FetchError> {
+    if !timestamp_ok(retrieved_at) {
+        return Err(FetchError::Arg("retrieved_at must be YYYY-MM-DDTHH:MM:SSZ (a real UTC date and time)"));
+    }
+    if let Some(why) = headers_check(headers) {
+        return Err(FetchError::Arg(why));
+    }
+    let decls = source::source_validate_value(meta)?;
     let Some(d) = decls.into_iter().find(|x| x.name == name) else {
         return Err(unresolved("no declared variable has that name").into());
     };

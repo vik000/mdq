@@ -258,18 +258,28 @@ pub struct Effective {
 }
 
 pub fn policy_intersect(host: Option<&Map>, library: Option<&Map>, document: Option<&Map>) -> Res<Effective> {
+    let docs: Vec<&Map> = document.into_iter().collect();
+    policy_intersect_docs(host, library, &docs)
+}
+
+/// `policy_intersect` with several document request layers (manifest, `.mdq.yaml` files,
+/// frontmatter, sidecar). They compose by the most restrictive rule: any `none` denies, any
+/// `required` sets `network_required`, host lists are intersected. A request never grants.
+pub fn policy_intersect_docs(host: Option<&Map>, library: Option<&Map>, documents: &[&Map]) -> Res<Effective> {
     let h = layer(host, false)?;
     let l = layer(library, false)?;
-    let d = doc_layer(document)?;
-    let allow = h.network.as_deref() == Some("allow") && l.network.as_deref() == Some("allow") && !d.deny;
+    let ds: Vec<Doc> = documents.iter().map(|d| doc_layer(Some(d))).collect::<Res<_>>()?;
+    let deny = ds.iter().any(|d| d.deny);
+    let required = ds.iter().any(|d| d.required);
+    let allow = h.network.as_deref() == Some("allow") && l.network.as_deref() == Some("allow") && !deny;
     let mut hosts: Option<Vec<String>> = None;
-    for layer_hosts in [&h.hosts, &l.hosts, &d.hosts] {
-        if let Some(x) = layer_hosts {
-            hosts = Some(match hosts {
-                None => x.clone(),
-                Some(cur) => pat_inter(&cur, x),
-            });
-        }
+    let doc_hosts: Vec<&Option<Vec<String>>> = ds.iter().map(|d| &d.hosts).collect();
+    // `flatten` skips the layers without a host list (None = unrestricted).
+    for x in [&h.hosts, &l.hosts].into_iter().chain(doc_hosts).flatten() {
+        hosts = Some(match hosts {
+            None => x.clone(),
+            Some(cur) => pat_inter(&cur, x),
+        });
     }
     let hp: BTreeSet<u16> = h.ports.clone().unwrap_or_else(|| vec![443]).into_iter().collect();
     let lp: BTreeSet<u16> = l.ports.clone().unwrap_or_else(|| vec![443]).into_iter().collect();
@@ -279,7 +289,24 @@ pub fn policy_intersect(host: Option<&Map>, library: Option<&Map>, document: Opt
     for k in 0..4 {
         limits[k] = h.limits[k].unwrap_or(LIM_DEFAULT[k]).min(l.limits[k].unwrap_or(LIM_DEFAULT[k]));
     }
-    Ok(Effective { network_allow: allow, hosts, ports, private_endpoints, limits, network_required: d.required })
+    Ok(Effective { network_allow: allow, hosts, ports, private_endpoints, limits, network_required: required })
+}
+
+/// An effective policy as the mapping `policy_decide` and `source_fetch` take (the same keys the
+/// Python `policy_intersect` returns).
+pub fn effective_map(e: &Effective) -> Vec<(String, PVal)> {
+    let strs = |v: &[String]| PVal::List(v.iter().map(|x| PVal::Str(x.clone())).collect());
+    let mut m = vec![
+        ("network".to_string(), PVal::Str(if e.network_allow { "allow" } else { "deny" }.to_string())),
+        ("hosts".to_string(), e.hosts.as_ref().map(|h| strs(h)).unwrap_or(PVal::None)),
+        ("ports".to_string(), PVal::List(e.ports.iter().map(|p| PVal::Int(*p as i64)).collect())),
+        ("private_endpoints".to_string(), strs(&e.private_endpoints)),
+    ];
+    for (k, v) in ["max_bytes", "timeout", "max_redirects", "max_concurrency"].iter().zip(e.limits) {
+        m.push((k.to_string(), PVal::Int(v as i64)));
+    }
+    m.push(("network_required".to_string(), PVal::Bool(e.network_required)));
+    m
 }
 
 fn eff(policy: &Map) -> Res<Effective> {

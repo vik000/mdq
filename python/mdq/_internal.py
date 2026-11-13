@@ -134,3 +134,9 @@ def policy_decide(policy, url, redirect_count=0):
 
 
 policy_ip_allowed = _i.policy_ip_allowed
+
+# E6.5 resolver, fake transport and snapshots
+source_fetch = _i.source_fetch
+snapshot_apply = _i.snapshot_apply
+url_join = _i.url_join
+sha256_hex = _i.sha256_hex

@@ -2,6 +2,30 @@
 
 Per feature. Veto by editing or telling me. Test-plan gap rows (G-numbers) in `docs/TEST_PLAN.md` hold the full wording.
 
+## E6.5 resolver, fake transport and snapshots (G46)
+**Decisions**
+- Transport protocol: a callable, dict in / dict out (`resolve`, `get`); in Rust a `Transport` trait. Unknown response keys are ignored.
+- The connection is pinned to the first validated address; every resolved address must pass the policy; the reported `peer` must be that address (strict, compared as IPs).
+- No automatic fallback to snapshots or stale data: a failed fetch is an error.
+- Caller headers go only to the first origin (scheme + host + port); names equal up to case are rejected.
+- Source identity = origin + sha256 key of the declaration (template URL, not the expanded URL); `named` is not identity.
+- `retrieved_at` is supplied by the caller; the core never reads the clock.
+- csv and `reader:` sources are MDQ_UNSUPPORTED_FEATURE here (need a reader adapter).
+- One leading BOM in a response body is dropped (same rule as G28).
+- JSON parse errors get a fixed message (the parser could quote a duplicate key from the body).
+- A Location that is not a valid URL is MDQ_SOURCE_FETCH_FAILED (server fault), not MDQ_SOURCE_INVALID.
+- Exception classes: only the class name is reported (plain identifier, else `Exception`); KeyboardInterrupt and other BaseExceptions propagate unchanged.
+- Public name `test_source` reserved for E8.
+- Fixed a bug in the reference `url_join`: `/..` and `.` on an empty base path now give `/` (RFC 3986).
+
+**Sacrifices**
+- No HTTP/2, streaming, cookies or automatic retry; redirect targets limited to https (policy).
+- Snapshot numbers must be int or Decimal (a float is a type error).
+
+**Open**
+- Port policy beyond the defaults.
+- Carried forward: G16 (ISO 4217 vs any 3 capitals), G24/G25, per-member encryption layout (Epic 7), block-ID `^id` / wiki links in export (E8.1), ISO date-times.
+
 ## E6.4 network policy (G45)
 **Decisions**
 - Network is allowed only if reader/user AND library layers both say allow; a missing layer or key means deny.

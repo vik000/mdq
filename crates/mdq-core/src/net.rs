@@ -295,3 +295,84 @@ pub fn url_parts(url: &str) -> Res<Parts> {
     let origin = format!("https://{host}:{port}");
     Ok(Parts { host, kind, port, origin, blocked })
 }
+
+// ---- E6.5: relative redirect targets (RFC 3986 section 5.2; G46) ----
+
+/// RFC 3986 section 5.2.4 "remove_dot_segments", written like the Python reference:
+/// split on '/', drop ".", let ".." pop the previous segment (never the leading empty one).
+fn remove_dots(path: &str) -> String {
+    // `Vec<&str>` borrows slices of `path`: no copying until the final `join`.
+    let mut out: Vec<&str> = Vec::new();
+    for seg in path.split('/') {
+        match seg {
+            "." => continue,
+            ".." => {
+                if out.len() > 1 {
+                    out.pop();
+                }
+                continue;
+            }
+            _ => out.push(seg),
+        }
+    }
+    // A path ending in "." or ".." still ends with a '/' ("/a/b/.." -> "/a/", "/.." -> "/").
+    let last = path.rsplit('/').next().unwrap_or("");
+    if last == "." || last == ".." {
+        out.push("");
+    }
+    out.join("/")
+}
+
+/// Resolve a reference (e.g. a `Location` header) against an absolute http(s) base URL.
+/// The fragment is dropped. `None` if `base` is not an absolute `http://` or `https://` URL.
+pub fn url_join(base: &str, reference: &str) -> Option<String> {
+    // `split_once` returns `Option<(before, after)>`; `map_or` keeps the whole string if there is no '#'.
+    let r = reference.split_once('#').map_or(reference, |(a, _)| a);
+    let b = base.split_once('#').map_or(base, |(a, _)| a);
+    let (scheme, rest) = b.split_once("://")?; // `?` on an Option returns None early
+    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
+        return None;
+    }
+    let cut = rest.find(|c| c == '/' || c == '?').unwrap_or(rest.len());
+    let (auth, tail) = rest.split_at(cut);
+    let (bpath, bquery) = match tail.split_once('?') {
+        Some((p, q)) => (p, Some(q)),
+        None => (tail, None),
+    };
+    // An absolute reference has a scheme: a letter, then letters/digits/"+-.", then ':'.
+    if let Some(colon) = r.find(':') {
+        let s = &r[..colon];
+        let mut cs = s.chars();
+        let first_ok = cs.next().is_some_and(|c| c.is_alphabetic());
+        if colon > 0 && first_ok && cs.all(|c| c.is_alphanumeric() || matches!(c, '+' | '-' | '.')) {
+            return Some(r.to_string());
+        }
+    }
+    if r.starts_with("//") {
+        return Some(format!("{scheme}:{r}"));
+    }
+    if r.is_empty() {
+        return Some(b.to_string());
+    }
+    let (rpath, rquery) = match r.split_once('?') {
+        Some((p, q)) => (p, Some(q)),
+        None => (r, None),
+    };
+    let q = |x: Option<&str>| x.map(|s| format!("?{s}")).unwrap_or_default();
+    if rpath.is_empty() {
+        // Same path; the reference's query wins, else the base query is kept.
+        let query = if rquery.is_some() { q(rquery) } else { q(bquery) };
+        return Some(format!("{scheme}://{auth}{bpath}{query}"));
+    }
+    let path = if rpath.starts_with('/') {
+        remove_dots(rpath)
+    } else {
+        // Merge: everything of the base path up to its last '/', then the reference.
+        let dir = match bpath.rfind('/') {
+            Some(i) => &bpath[..=i],
+            None => "/",
+        };
+        remove_dots(&format!("{dir}{rpath}"))
+    };
+    Some(format!("{scheme}://{auth}{path}{}", q(rquery)))
+}

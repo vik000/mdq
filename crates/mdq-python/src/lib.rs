@@ -1096,6 +1096,222 @@ fn policy_ip_allowed(py: Python<'_>, policy: &Bound<'_, PyDict>, host: &str, add
     }
 }
 
+// ---- E6.5 resolver hooks (G46) ----
+
+use mdq_core::resolver::{self, GetRequest, Response, TransportError};
+
+/// Adapter: a Python callable `transport(request: dict) -> dict` seen from Rust as a `resolver::Transport`.
+/// It only converts types; every check of the answer happens in the core.
+/// `fatal` keeps an error that must reach Python unchanged (KeyboardInterrupt, a panic, ...).
+struct PyTransport<'py> {
+    f: Bound<'py, PyAny>,
+    fatal: Option<PyErr>,
+}
+
+impl<'py> PyTransport<'py> {
+    fn call(&mut self, req: Bound<'py, PyDict>) -> Result<Bound<'py, PyAny>, TransportError> {
+        let py = self.f.py();
+        match self.f.call1((req,)) {
+            Ok(v) => Ok(v),
+            Err(e) if e.is_instance_of::<pyo3::exceptions::PyTimeoutError>(py) => Err(TransportError::Timeout),
+            // Only the class name crosses over: the exception text may contain URLs or secrets.
+            Err(e) if e.is_instance_of::<PyException>(py) => {
+                let name = e.get_type(py).name().map(|n| n.to_string()).unwrap_or_default();
+                Err(TransportError::Failed(name))
+            }
+            Err(e) => {
+                self.fatal = Some(e); // BaseException but not Exception: re-raised by the wrapper
+                Err(TransportError::Abort)
+            }
+        }
+    }
+}
+
+/// A dict of str -> str, or `None` if anything has another type.
+fn str_pairs(v: &Bound<'_, PyAny>) -> Option<Vec<(String, String)>> {
+    let d = v.downcast::<PyDict>().ok()?;
+    let mut out = Vec::new();
+    for (k, x) in d.iter() {
+        out.push((k.downcast::<PyString>().ok()?.to_string(), x.downcast::<PyString>().ok()?.to_string()));
+    }
+    Some(out)
+}
+
+/// An `int` (not `bool`) that fits in i64, else `None`.
+fn plain_int(v: &Bound<'_, PyAny>) -> Option<i64> {
+    if v.downcast::<PyBool>().is_ok() || v.downcast::<PyInt>().is_err() {
+        return None;
+    }
+    v.extract::<i64>().ok()
+}
+
+fn to_response(v: &Bound<'_, PyAny>) -> Option<Response> {
+    let d = v.downcast::<PyDict>().ok()?;
+    // `get_item` returns PyResult<Option<..>>: `.ok()?` drops errors, the second `?` a missing key.
+    let status = plain_int(&d.get_item("status").ok()??)?;
+    let headers = str_pairs(&d.get_item("headers").ok()??)?;
+    let body = d.get_item("body").ok()??.downcast::<pyo3::types::PyBytes>().ok()?.as_bytes().to_vec();
+    let peer = d.get_item("peer").ok()??.downcast::<PyString>().ok()?.to_string();
+    let elapsed_ms = match d.get_item("elapsed_ms").ok()? {
+        None => 0,
+        Some(x) => plain_int(&x)?,
+    };
+    Some(Response { status, headers, body, peer, elapsed_ms })
+}
+
+impl<'py> resolver::Transport for PyTransport<'py> {
+    fn resolve(&mut self, host: &str) -> Result<Vec<String>, TransportError> {
+        let py = self.f.py();
+        let req = PyDict::new(py);
+        req.set_item("op", "resolve").map_err(|_| TransportError::Malformed)?;
+        req.set_item("host", host).map_err(|_| TransportError::Malformed)?;
+        let v = self.call(req)?;
+        let parse = || -> Option<Vec<String>> {
+            let d = v.downcast::<PyDict>().ok()?;
+            let list = d.get_item("addresses").ok()??;
+            let list = list.downcast::<PyList>().ok()?;
+            list.iter().map(|a| a.downcast::<PyString>().ok().map(|s| s.to_string())).collect()
+        };
+        parse().ok_or(TransportError::Malformed)
+    }
+
+    fn get(&mut self, r: &GetRequest) -> Result<Response, TransportError> {
+        let py = self.f.py();
+        let build = || -> PyResult<Bound<'py, PyDict>> {
+            let req = PyDict::new(py);
+            req.set_item("op", "get")?;
+            req.set_item("url", &r.url)?;
+            req.set_item("address", &r.address)?;
+            let h = PyDict::new(py);
+            for (k, v) in &r.headers {
+                h.set_item(k, v)?;
+            }
+            req.set_item("headers", h)?;
+            req.set_item("timeout_ms", r.timeout_ms)?;
+            req.set_item("max_bytes", r.max_bytes)?;
+            Ok(req)
+        };
+        let req = build().map_err(|_| TransportError::Malformed)?;
+        let v = self.call(req)?;
+        to_response(&v).ok_or(TransportError::Malformed)
+    }
+}
+
+/// `{name, type, value, unit, retrieved_at, source: {kind, named, origin, key}}` (with or without `name`).
+fn fetched_dict<'py>(py: Python<'py>, f: resolver::Fetched, with_name: bool) -> PyResult<Bound<'py, PyDict>> {
+    let dec = py.import("decimal")?.getattr("Decimal")?;
+    let d = PyDict::new(py);
+    if with_name {
+        d.set_item("name", f.name)?;
+    }
+    d.set_item("type", f.checked.vtype)?;
+    match f.checked.value {
+        source::Typed::Num(n) => d.set_item("value", dec.call1((n.as_str(),))?)?,
+        source::Typed::Str(s) | source::Typed::Date(s) => d.set_item("value", s)?,
+        source::Typed::Bool(b) => d.set_item("value", b)?,
+    }
+    d.set_item("unit", f.checked.unit)?;
+    d.set_item("retrieved_at", f.retrieved_at)?;
+    let s = PyDict::new(py);
+    s.set_item("kind", f.source.kind)?;
+    s.set_item("named", f.source.named)?;
+    s.set_item("origin", f.source.origin)?;
+    s.set_item("key", f.source.key)?;
+    d.set_item("source", s)?;
+    Ok(d)
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, name, policy, transport, retrieved_at, allow_network=true, headers=None))]
+#[allow(clippy::too_many_arguments)]
+fn source_fetch<'py>(
+    py: Python<'py>,
+    text: &str,
+    name: &str,
+    policy: &Bound<'py, PyDict>,
+    transport: &Bound<'py, PyAny>,
+    retrieved_at: &str,
+    allow_network: bool,
+    headers: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyDict>> {
+    if !transport.is_callable() {
+        return Err(PyTypeError::new_err("transport must be callable"));
+    }
+    let hdrs = match headers {
+        None => Vec::new(),
+        Some(h) if h.is_none() => Vec::new(),
+        Some(h) => str_pairs(h).ok_or_else(|| PyTypeError::new_err("headers must be a dict of str to str"))?,
+    };
+    let p = to_map(policy)?;
+    let mut t = PyTransport { f: transport.clone(), fatal: None };
+    let r = resolver::source_fetch(text, name, &p, &mut t, retrieved_at, allow_network, &hdrs);
+    if let Some(e) = t.fatal.take() {
+        return Err(e);
+    }
+    match r {
+        Ok(f) => fetched_dict(py, f, true),
+        Err(resolver::FetchError::Arg(msg)) => Err(PyValueError::new_err(msg)),
+        Err(resolver::FetchError::Diag(d)) => Err(to_py_err(py, d)),
+    }
+}
+
+/// Python value -> `SVal`, without interpretation (the core decides what is acceptable).
+fn to_sval(v: &Bound<'_, PyAny>, dec: &Bound<'_, PyAny>) -> PyResult<resolver::SVal> {
+    use resolver::SVal;
+    Ok(if v.is_none() {
+        SVal::Null
+    } else if v.downcast::<PyBool>().is_ok() {
+        SVal::Bool(v.is_truthy()?)
+    } else if v.downcast::<PyInt>().is_ok() || v.is_instance(dec)? {
+        SVal::Num(v.str()?.to_string())
+    } else if v.downcast::<pyo3::types::PyFloat>().is_ok() {
+        SVal::Float
+    } else if let Ok(s) = v.downcast::<PyString>() {
+        SVal::Str(s.to_string())
+    } else if v.downcast::<PyList>().is_ok() || v.downcast::<PyTuple>().is_ok() {
+        SVal::List
+    } else if let Ok(d) = v.downcast::<PyDict>() {
+        let mut m = Vec::new();
+        for (k, x) in d.iter() {
+            // A non-str key becomes "" which the core rejects as an unknown key.
+            let key = k.downcast::<PyString>().map(|s| s.to_string()).unwrap_or_default();
+            m.push((key, to_sval(&x, dec)?));
+        }
+        SVal::Map(m)
+    } else {
+        SVal::Other
+    })
+}
+
+#[pyfunction]
+fn snapshot_apply<'py>(py: Python<'py>, text: &str, snapshot: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
+    if snapshot.downcast::<PyList>().is_err() && snapshot.downcast::<PyTuple>().is_err() {
+        return Err(PyTypeError::new_err("snapshot must be a list of entries"));
+    }
+    let dec = py.import("decimal")?.getattr("Decimal")?;
+    let mut entries = Vec::new();
+    for e in snapshot.try_iter()? {
+        entries.push(to_sval(&e?, &dec)?);
+    }
+    let out = PyDict::new(py);
+    for f in wrap(py, resolver::snapshot_apply(text, &entries))? {
+        let name = f.name.clone();
+        out.set_item(name, fetched_dict(py, f, false)?)?;
+    }
+    Ok(out)
+}
+
+#[pyfunction]
+#[pyo3(name = "url_join", signature = (base, reference))]
+fn url_join_hook(base: &str, reference: &str) -> PyResult<String> {
+    net::url_join(base, reference).ok_or_else(|| PyValueError::new_err("base must be an absolute http(s) URL"))
+}
+
+#[pyfunction]
+fn sha256_hex(data: &[u8]) -> String {
+    resolver::sha256_hex(data)
+}
+
 fn attrs_dict<'py>(py: Python<'py>, attrs: Vec<(String, String)>) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
     for (k, v) in attrs {
@@ -1294,6 +1510,10 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(policy_intersect, &internal)?)?;
     internal.add_function(wrap_pyfunction!(policy_decide, &internal)?)?;
     internal.add_function(wrap_pyfunction!(policy_ip_allowed, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(source_fetch, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(snapshot_apply, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(url_join_hook, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(sha256_hex, &internal)?)?;
     internal.add_function(wrap_pyfunction!(attrs_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_eval, &internal)?)?;

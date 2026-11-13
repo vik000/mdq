@@ -559,7 +559,7 @@ fn num_canonical(s: &str) -> Res<String> {
     decimal::canonical(&signed).map_err(|_| out())
 }
 
-fn date_ok(s: &str) -> bool {
+pub(crate) fn date_ok(s: &str) -> bool {
     let b = s.as_bytes();
     if b.len() != 10 || b[4] != b'-' || b[7] != b'-' {
         return false;

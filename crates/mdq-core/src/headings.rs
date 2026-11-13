@@ -115,7 +115,7 @@ pub(crate) struct LinkParts {
     pub end: usize,
 }
 
-fn link_tail(c: &[char], i: usize, n: usize) -> Option<usize> {
+pub(crate) fn link_tail(c: &[char], i: usize, n: usize) -> Option<usize> {
     link_parts(c, i, n).map(|p| p.end)
 }
 

@@ -13,6 +13,7 @@ use mdq_core::fx;
 use mdq_core::headings;
 use mdq_core::imports;
 use mdq_core::links;
+use mdq_core::notes;
 use mdq_core::refs;
 use mdq_core::rich;
 use mdq_core::meta;
@@ -640,7 +641,7 @@ fn resolve_ref<'py>(py: Python<'py>, text: &str, fragment: &str, first_line: u32
 }
 
 #[pyfunction]
-#[pyo3(signature = (text, path, read, max_depth=64, max_expansions=10000, max_bytes=16777216, rebase=true))]
+#[pyo3(signature = (text, path, read, max_depth=64, max_expansions=10000, max_bytes=16777216, rebase=true, footnotes=true))]
 fn import_expand<'py>(
     py: Python<'py>,
     text: &str,
@@ -650,6 +651,7 @@ fn import_expand<'py>(
     max_expansions: usize,
     max_bytes: usize,
     rebase: bool,
+    footnotes: bool,
 ) -> PyResult<Bound<'py, PyDict>> {
     if !read.is_callable() {
         return Err(PyTypeError::new_err("read must be callable"));
@@ -672,7 +674,7 @@ fn import_expand<'py>(
             },
         }
     };
-    let limits = imports::Limits { max_depth, max_expansions, max_bytes, rebase_links: rebase };
+    let limits = imports::Limits { max_depth, max_expansions, max_bytes, rebase_links: rebase, footnotes };
     let res = imports::import_expand(text, path, &mut reader, limits);
     if let Some(e) = failure.borrow_mut().take() {
         return Err(e);
@@ -726,6 +728,23 @@ fn details_fallback(py: Python<'_>, text: &str, first_line: u32) -> PyResult<Str
 #[pyo3(signature = (text, first_line=1))]
 fn columns_fallback(py: Python<'_>, text: &str, first_line: u32) -> PyResult<String> {
     wrap(py, rich::columns_fallback(text, first_line))
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, first_line=1))]
+fn math_fallback(py: Python<'_>, text: &str, first_line: u32) -> PyResult<String> {
+    wrap(py, notes::math_fallback(text, first_line))
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, first_line=1))]
+fn footnote_check(py: Python<'_>, text: &str, first_line: u32) -> PyResult<Vec<String>> {
+    wrap(py, notes::footnote_check(text, first_line))
+}
+
+#[pyfunction]
+fn footnote_rename(py: Python<'_>, text: &str, scope: &str) -> PyResult<String> {
+    wrap(py, notes::footnote_rename(text, scope))
 }
 
 fn attrs_dict<'py>(py: Python<'py>, attrs: Vec<(String, String)>) -> PyResult<Bound<'py, PyDict>> {
@@ -931,6 +950,9 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(import_expand, &internal)?)?;
     internal.add_function(wrap_pyfunction!(rebase_link, &internal)?)?;
     internal.add_function(wrap_pyfunction!(rebase_links, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(math_fallback, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(footnote_check, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(footnote_rename, &internal)?)?;
     internal.add_function(wrap_pyfunction!(highlight_fallback, &internal)?)?;
     internal.add_function(wrap_pyfunction!(callout_fallback, &internal)?)?;
     internal.add_function(wrap_pyfunction!(details_fallback, &internal)?)?;

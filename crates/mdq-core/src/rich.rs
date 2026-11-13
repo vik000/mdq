@@ -21,7 +21,7 @@ fn check(text: &str) -> Res<()> {
 }
 
 /// A leaf's text (segments joined by LF) and, for each char, its source offset (`usize::MAX` for LF).
-fn leaf_text(c: &[char], segs: &[(usize, usize)]) -> (Vec<char>, Vec<usize>) {
+pub(crate) fn leaf_text(c: &[char], segs: &[(usize, usize)]) -> (Vec<char>, Vec<usize>) {
     let mut s = Vec::new();
     let mut origin = Vec::new();
     for (k, &(x, y)) in segs.iter().enumerate() {

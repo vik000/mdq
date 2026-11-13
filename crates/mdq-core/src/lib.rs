@@ -15,6 +15,7 @@ pub mod imports;
 pub mod links;
 pub mod meta;
 pub mod paths;
+pub mod notes;
 pub mod refs;
 pub mod rich;
 pub mod unitab;

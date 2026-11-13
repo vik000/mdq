@@ -9,7 +9,8 @@
 use crate::blocks::{line_bounds, parse, Kind, Leaf};
 use crate::diag::{Code, Diagnostic};
 use crate::frontmatter;
-use crate::links::{apply_edits, leaf_edits};
+use crate::links::{apply_edits, leaf_edits, Edit};
+use crate::notes::{fn_edits, fn_scope};
 use crate::paths::path_normalise;
 use crate::refs::{resolve_in, Index};
 use crate::vars::html_inline_end;
@@ -28,11 +29,13 @@ pub struct Limits {
     pub max_bytes: usize,
     /// Rebase the links of embedded files to the root file's directory.
     pub rebase_links: bool,
+    /// Give each embedded file its own footnote scope (see `notes::fn_scope`).
+    pub footnotes: bool,
 }
 
 impl Default for Limits {
     fn default() -> Self {
-        Limits { max_depth: 64, max_expansions: 10_000, max_bytes: MAX_INPUT, rebase_links: true }
+        Limits { max_depth: 64, max_expansions: 10_000, max_bytes: MAX_INPUT, rebase_links: true, footnotes: true }
     }
 }
 
@@ -233,6 +236,7 @@ struct Ctx<'a> {
     out: String,
     out_lines: usize,
     map: Vec<Segment>,
+    nth: HashMap<String, usize>,
 }
 
 impl<'a> Ctx<'a> {
@@ -262,20 +266,23 @@ impl<'a> Ctx<'a> {
         Ok(s)
     }
 
-    fn emit(&mut self, src: &Src, x: usize, y: usize) -> Res<()> {
+    fn emit(&mut self, src: &Src, x: usize, y: usize, scope: Option<&str>) -> Res<()> {
         if x >= y {
             return Ok(());
         }
         let end = if y < src.n() { src.starts[y] } else { src.c.len() };
         if src.starts[x] < end {
+            let mut edits: Vec<Edit> = Vec::new();
             if self.limits.rebase_links && src.dir != self.root_dir {
-                let edits = leaf_edits(&src.c, &src.starts, &src.leaves, x, y, &src.dir, &self.root_dir, src.body_line as u32)
-                    .map_err(|d| with_path(d, &src.path))?;
-                let piece = apply_edits(&src.c, src.starts[x], end, &edits);
-                self.out.push_str(&piece);
-            } else {
-                self.out.extend(src.c[src.starts[x]..end].iter());
+                edits.extend(leaf_edits(&src.c, &src.starts, &src.leaves, x, y, &src.dir, &self.root_dir, src.body_line as u32)
+                    .map_err(|d| with_path(d, &src.path))?);
             }
+            if let (true, Some(sc)) = (self.limits.footnotes, scope) {
+                edits.extend(fn_edits(&src.c, &src.starts, &src.leaves, sc, Some(x), Some(y)));
+            }
+            edits.sort_by(|a, b| a.start.cmp(&b.start).then(a.end.cmp(&b.end)));
+            let piece = apply_edits(&src.c, src.starts[x], end, &edits);
+            self.out.push_str(&piece);
             self.check_size()?;
         }
         let phantom = (y == src.n() && src.ends[y - 1] == src.starts[y - 1]) as usize;
@@ -296,7 +303,7 @@ impl<'a> Ctx<'a> {
         Ok(())
     }
 
-    fn expand(&mut self, src: &Src, a: usize, b: usize) -> Res<()> {
+    fn expand(&mut self, src: &Src, a: usize, b: usize, scope: Option<&str>) -> Res<()> {
         let mut p = a;
         for leaf in &src.leaves {
             if !(a <= leaf.first_line && leaf.first_line < b) {
@@ -305,11 +312,11 @@ impl<'a> Ctx<'a> {
             let Some(e) = leaf_embed(src, leaf)? else {
                 continue;
             };
-            self.emit(src, p, e.line)?;
+            self.emit(src, p, e.line, scope)?;
             self.embed(src, &e)?;
             p = e.line + 1;
         }
-        self.emit(src, p, b)
+        self.emit(src, p, b, scope)
     }
 
     fn embed(&mut self, src: &Src, e: &Embed) -> Res<()> {
@@ -351,7 +358,10 @@ impl<'a> Ctx<'a> {
         }
         self.stack.push(key);
         let before = self.out.len();
-        self.expand(&t, ra, rb)?;
+        let nth = self.nth.entry(target.clone()).or_insert(0);
+        *nth += 1;
+        let scope = fn_scope(&target, *nth);
+        self.expand(&t, ra, rb, Some(&scope))?;
         self.stack.pop();
         if self.out.len() > before && !self.out.ends_with(&['\n', '\r'][..]) {
             let e1 = if e.line + 1 < src.n() { src.starts[e.line + 1] } else { src.c.len() };
@@ -385,8 +395,9 @@ pub fn import_expand(
         out: String::new(),
         out_lines: 0,
         map: Vec::new(),
+        nth: HashMap::new(),
     };
     ctx.cache.insert(root, rs.clone());
-    ctx.expand(&rs, 0, rs.n())?;
+    ctx.expand(&rs, 0, rs.n(), None)?;
     Ok(Expanded { text: ctx.out, map: ctx.map })
 }

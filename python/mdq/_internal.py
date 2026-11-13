@@ -95,3 +95,8 @@ highlight_fallback = _i.highlight_fallback
 callout_fallback = _i.callout_fallback
 details_fallback = _i.details_fallback
 columns_fallback = _i.columns_fallback
+
+# E5.2a maths and footnotes
+math_fallback = _i.math_fallback
+footnote_check = _i.footnote_check
+footnote_rename = _i.footnote_rename

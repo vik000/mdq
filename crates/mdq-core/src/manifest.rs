@@ -218,6 +218,13 @@ fn in_file(mut d: Diagnostic, path: &str) -> Diagnostic {
 
 /// Open a `.mdq` package from its bytes.
 pub fn package_open(data: &[u8], lim: &ZipLimits) -> Res<Package> {
+    // No implicit decryption (package.md): an age file must go through `package_open_age`.
+    if crate::age::is_age(data) {
+        return Err(Diagnostic::new(
+            Code::SecurityDenied,
+            "the package is age-encrypted; decrypt it explicitly with the host's identities",
+        ));
+    }
     let archive = zip::zip_read(data, lim)?;
     let manifest_member = archive
         .members
@@ -245,4 +252,23 @@ pub fn package_open(data: &[u8], lim: &ZipLimits) -> Res<Package> {
         files: archive.members.into_iter().map(|m| (m.name, m.data)).collect(),
         directories: archive.directories,
     })
+}
+
+/// Open a whole-package encrypted `.mdq.age`: decrypt with the host's credentials, then open.
+/// The plaintext must itself be a zip package (an age file inside an age file is refused by
+/// `package_open`).
+pub fn package_open_age(
+    data: &[u8],
+    identities: &[[u8; 32]],
+    passphrase: Option<&str>,
+    max_work_factor: u8,
+    lim: &ZipLimits,
+) -> Res<Package> {
+    // The ciphertext is a little larger than the plaintext; check the archive limit up front so a
+    // huge file is refused before any decryption work.
+    if data.len() as u64 > lim.max_archive_size.saturating_add(1024 * 1024) {
+        return Err(Diagnostic::new(Code::ResourceLimit, format!("the archive is larger than {} bytes", lim.max_archive_size)));
+    }
+    let plain = crate::age::age_decrypt(data, identities, passphrase, max_work_factor)?;
+    package_open(&plain, lim)
 }

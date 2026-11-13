@@ -3,7 +3,7 @@
 Updated with every commit. Estimates are in sessions (one session = one feature cycle: Rust, shim check, tests,
 commit message), rough, about ±50%. Feature definitions and tests: `docs/TEST_PLAN.md` section 4.
 
-**Last update:** E7.2 manifest and `package_open` built natively; fix in E5.2a maths fallback (output not a fixed point, found by Hypothesis); 5054 passed, 1 strict xfail for G48.
+**Last update:** E7.3 age built natively (5140 passed, 2 strict xfails: G48, GAP-4); Epic 7 done.
 
 ## Status
 
@@ -17,26 +17,28 @@ commit message), rough, about ±50%. Feature definitions and tests: `docs/TEST_P
 | 4 Composition and references (F04–F07) | done | E4.1 paths and confinement ✔, E4.2 heading text/slugs/dedupe ✔, E4.3 block IDs and `resolve_ref` ✔, E4.4 import expansion ✔, E4.5 link rebasing ✔ | | 0 |
 | 5 Rich features and export (F10, F23) | done | E5.1 highlight/callout/details/columns ✔, E5.2a math/footnotes ✔, E5.2b citations ✔, E5.3 TOC ✔, E5.4 `export_markdown` ✔ | | 0 |
 | 6 Sources and policy (F16–F19) | done | E6.1 declarations and URL templates ✔, E6.2 JSON Pointer and types ✔, E6.3 URL/IP classification ✔, E6.4 policy ✔, E6.5 resolver, fake transport and snapshots ✔ | | 0 |
-| 7 Packages and encryption (F20, F21) | in progress | E7.1 hostile-zip reader ✔, E7.2 manifest and `package_open` ✔, E7.3 age | c04ca23 (E7.1) | 1 |
+| 7 Packages and encryption (F20, F21) | done | E7.1 hostile-zip reader ✔, E7.2 manifest and `package_open` ✔, E7.3 age (X25519 + passphrase, pyrage-verified) ✔ | c04ca23 (E7.1), 1f8c87b (E7.2 + E5.2a fix) | 0 |
 | 8 API, CLI, packaging (F25, F26) | not started | E8.1 `compile`, E8.2 typing/threads/memory, E8.3 CLI, E8.4 wheel smoke test | | 6 |
 | Cross-cutting | open | rule ledger and conformance fixtures, CI (incl. `HYPOTHESIS_PROFILE=ci`), Rust coverage, sdist fix (`include_str!("../../../spec/units.tsv")`) | | 3 |
-| **Total** | | | | **about 10** |
+| **Total** | | | | **about 9.5** |
 
-At the pace so far (29 commits for Epics 0–6), the remaining 10 sessions are roughly 2–4 working days; build-error rounds add to that.
+At the pace so far (29 commits for Epics 0–6), the remaining 9.5 sessions (0.5 for the open E5.2a bug) are roughly 2–4 working days; build-error rounds add to that.
 
 ## Open decisions
 
 - G10 resolved in G44 (CGNAT blocked)
 - G16: ISO 4217 list or any 3-capital currency code (no longer blocks E6; blocks unit/currency validation in E8.1)
 - G24 / G25: offered for veto
-- Per-member encryption layout (spec gap 4): xfail in Epic 7
+- Per-member encryption layout (spec gap 4): strict xfail in `test_e7_f73_age.py`
 - MDZip (F22): deferred by the spec
 - E7.1 (G47): case-insensitive name collisions rejected although the MDQ VFS is case-sensitive: offered for veto
 - E7.2 (G48): spec conflict package.md `security: {network: deny, remote_imports: false}` vs G45 `network: request|none`; decided: accept both spellings (`deny` = `none`). Spec fix wanted
 - E7.2 (G48): the package.md example manifest has `features: [core, rich]` without `package`, which our rule rejects (strict xfail). Fix the example or drop the rule
 - E5.2a maths fallback: CONFIRMED bug, not fixed: `` `a $b$ c `` renders differently after fallback (new backticks pair with a stray one). Fix before E8.1 export. See DECISIONS
-- E7.3: age needs X25519, ChaCha20-Poly1305, HKDF and scrypt; to decide before starting: audited crates (`age` / RustCrypto) vs own code (own crypto not recommended)
+- E7.3 (G49): RustCrypto primitives + own age format, host-supplied randomness, X25519 + passphrase (scrypt cap log2 N <= 20), explicit decrypt API: offered for veto
+- E8.1: plaintext export of a decrypted package needs explicit permission (moved from E7.3)
 
 ## Next
 
-1. E7.3 age (`.mdq.age` whole-package encryption; `pyrage` oracle; per-member layout xfail, spec gap 4). First decide the crypto dependency. G16 still open.
+1. Fix the open E5.2a bug (`` `a $b$ c ``: new backticks pair with a stray one), since export depends on it.
+2. Epic 8, E8.1 `compile` (cascade with the manifest as lowest layer, sources validation, plaintext export permission, `test_source`). G16 still open.

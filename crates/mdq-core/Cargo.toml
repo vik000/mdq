@@ -9,3 +9,11 @@ description = "MDQ core: pure Rust logic, no Python or network dependencies"
 num-bigint = "0.4"
 num-traits = "0.2"
 unicode-normalization = "0.1"
+# E7.3 age: audited RustCrypto primitives. Default features are OFF so nothing here reads the
+# OS random source (the host passes random bytes in).
+x25519-dalek = { version = "2", default-features = false, features = ["static_secrets", "zeroize"] }
+chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
+hkdf = { version = "0.12", default-features = false }
+hmac = { version = "0.12", default-features = false }
+sha2 = { version = "0.10", default-features = false }
+scrypt = { version = "0.11", default-features = false }

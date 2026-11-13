@@ -160,3 +160,29 @@ zip_read = _i.zip_read
 # E7.2 package manifest
 manifest_parse = _i.manifest_parse
 package_open = _i.package_open
+
+# E7.3 age encryption
+
+
+def _work_factor(value, name):
+    # bool is an int subclass, and a float would be truncated by PyO3: both are TypeError.
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} must be an int")
+    return value
+
+
+def age_decrypt(data, identities=None, passphrase=None, max_work_factor=20):
+    return _i.age_decrypt(data, identities, passphrase, _work_factor(max_work_factor, "max_work_factor"))
+
+
+def age_encrypt(data, random, recipients=None, passphrase=None, work_factor=18):
+    return _i.age_encrypt(data, random, recipients, passphrase, _work_factor(work_factor, "work_factor"))
+
+
+def package_open_age(data, identities=None, passphrase=None, limits=None, max_work_factor=20):
+    return _i.package_open_age(data, identities, passphrase, limits, _work_factor(max_work_factor, "max_work_factor"))
+
+
+age_random_len = _i.age_random_len
+age_recipient = _i.age_recipient
+age_identity = _i.age_identity

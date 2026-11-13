@@ -12,3 +12,8 @@ license = "Apache-2.0"
 # into a Python exception instead of killing the interpreter.
 [profile.release]
 opt-level = 3
+
+# Optimise dependencies even in dev builds (`maturin develop`): scrypt and X25519 are far too slow
+# unoptimised. Our own crates stay at the normal dev settings (fast compiles, debug checks).
+[profile.dev.package."*"]
+opt-level = 3

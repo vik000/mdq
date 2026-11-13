@@ -2,6 +2,26 @@
 
 Per feature. Veto by editing or telling me. Test-plan gap rows (G-numbers) in `docs/TEST_PLAN.md` hold the full wording.
 
+## E7.3 age encryption (G49)
+**Decisions**
+- Audited RustCrypto primitives (x25519-dalek, chacha20poly1305, hkdf, hmac, sha2, scrypt; default features off, so no OS random source in the core); the age v1 format (header, stanzas, MAC, STREAM payload, Bech32 keys, base64) is our own code; pyrage is the oracle in both directions.
+- Randomness is supplied by the host (`random` bytes of exactly `age_random_len(...)`); the core never reads the OS random source. Same input + same random = same output.
+- Recipient types: X25519 and passphrase (scrypt). Decryption caps the scrypt work factor at log2 N <= 20 (host may lower it), checked before any scrypt work; above: MDQ_RESOURCE_LIMIT.
+- API: explicit `age_decrypt`, `age_encrypt`, `package_open_age`; plain `package_open` on age data is MDQ_SECURITY_DENIED (no implicit decryption).
+- Codes: malformed envelope MDQ_INVALID_SYNTAX; missing/wrong key and any authentication failure (header MAC, modified or truncated payload) MDQ_SECURITY_DENIED; armored files and other age versions MDQ_UNSUPPORTED_FEATURE.
+- Header bounds: 1 MiB and 256 stanzas (the header is attacker-controlled; each X25519 stanza costs one key exchange per identity).
+- Unknown stanza types are ignored (age "grease"), known ones are checked strictly; an scrypt stanza must be alone.
+- `[profile.dev.package."*"] opt-level = 3`: dependencies are optimised in dev builds (scrypt is unusably slow otherwise); our own crates keep debug settings.
+- Plaintext export permission is part of export (E8.1).
+
+**Sacrifices**
+- Armored (PEM) age files are not supported.
+- No plugin recipients (age-plugin-*), no SSH keys.
+- scrypt at log2 N = 20 needs 1 GiB of memory; hosts with less should lower `max_work_factor`.
+
+**Open**
+- Per-member encryption layout (spec gap 4): strict xfail `test_per_member_encryption_layout`.
+
 ## Fix: E5.2a maths fallback output is a fixed point (G38)
 **Decisions**
 - Found by Hypothesis (`$$a\n$$a$$a$$`): a `$` run that failed to open a span (its first following `$` follows a line break) could pair on a second pass once a later span had become a code span. Such runs are now escaped as `\$`, only when the re-scan of the output would pair them (loop until nothing pairs). `$a $b$` stays `$a `b``.

@@ -32,6 +32,7 @@ use mdq_core::yaml;
 use mdq_core::inflate;
 use mdq_core::zip;
 use mdq_core::manifest;
+use mdq_core::age;
 use pyo3::exceptions::{PyException, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyBytes, PyDict, PyInt, PyList, PyString, PyTuple};
@@ -1570,6 +1571,10 @@ fn package_open<'py>(py: Python<'py>, data: &Bound<'py, PyAny>, limits: Option<&
     let bytes = data.downcast::<PyBytes>().map_err(|_| PyTypeError::new_err("data must be bytes"))?;
     let l = zip_limits_arg(limits)?;
     let p = wrap(py, manifest::package_open(bytes.as_bytes(), &l))?;
+    package_to_py(py, &p)
+}
+
+fn package_to_py<'py>(py: Python<'py>, p: &manifest::Package) -> PyResult<Bound<'py, PyDict>> {
     let out = PyDict::new(py);
     manifest_to_py(py, &p.manifest, &out)?;
     out.set_item("entrypoint_member", &p.entrypoint_member)?;
@@ -1580,6 +1585,128 @@ fn package_open<'py>(py: Python<'py>, data: &Bound<'py, PyAny>, limits: Option<&
     out.set_item("files", files)?;
     out.set_item("directories", p.directories.clone())?;
     Ok(out)
+}
+
+// ---- E7.3 age encryption (G49) ----
+
+/// Only real `bytes` (not bytearray/memoryview/str).
+fn bytes_arg<'py>(v: &Bound<'py, PyAny>, what: &str) -> PyResult<Bound<'py, PyBytes>> {
+    v.downcast::<PyBytes>().cloned().map_err(|_| PyTypeError::new_err(format!("{what} must be bytes")))
+}
+
+/// A list/tuple of str (a bare str is refused, so "AGE-..." is not read as characters).
+fn str_list(v: Option<&Bound<'_, PyAny>>, what: &str) -> PyResult<Vec<String>> {
+    let Some(v) = v else { return Ok(Vec::new()) };
+    if v.is_none() {
+        return Ok(Vec::new());
+    }
+    if v.is_instance_of::<PyString>() || !(v.is_instance_of::<PyList>() || v.is_instance_of::<PyTuple>()) {
+        return Err(PyTypeError::new_err(format!("{what} must be a list of str")));
+    }
+    let mut out = Vec::new();
+    for item in v.try_iter()? {
+        let item = item?;
+        let s = item.downcast::<PyString>().map_err(|_| PyTypeError::new_err(format!("{what} must be a list of str")))?;
+        out.push(s.to_string());
+    }
+    Ok(out)
+}
+
+fn identities_arg(v: Option<&Bound<'_, PyAny>>) -> PyResult<Vec<[u8; 32]>> {
+    str_list(v, "identities")?
+        .iter()
+        .map(|s| age::parse_identity(s).map_err(PyValueError::new_err))
+        .collect()
+}
+
+fn work_factor_arg(n: i64, what: &str) -> PyResult<u8> {
+    if !(1..=age::MAX_WORK_FACTOR as i64).contains(&n) {
+        return Err(PyValueError::new_err(format!("{what} must be between 1 and {}", age::MAX_WORK_FACTOR)));
+    }
+    Ok(n as u8)
+}
+
+/// Internal: decrypt an age file. `_internal.age_decrypt` checks int/bool argument types first.
+#[pyfunction]
+#[pyo3(signature = (data, identities=None, passphrase=None, max_work_factor=20))]
+fn age_decrypt<'py>(
+    py: Python<'py>,
+    data: &Bound<'py, PyAny>,
+    identities: Option<&Bound<'py, PyAny>>,
+    passphrase: Option<&str>,
+    max_work_factor: i64,
+) -> PyResult<Bound<'py, PyBytes>> {
+    let d = bytes_arg(data, "data")?;
+    let ids = identities_arg(identities)?;
+    let wf = work_factor_arg(max_work_factor, "max_work_factor")?;
+    let out = wrap(py, age::age_decrypt(d.as_bytes(), &ids, passphrase, wf))?;
+    Ok(PyBytes::new(py, &out))
+}
+
+/// Internal: encrypt to X25519 recipients or a passphrase with caller-supplied random bytes.
+#[pyfunction]
+#[pyo3(signature = (data, random, recipients=None, passphrase=None, work_factor=18))]
+fn age_encrypt<'py>(
+    py: Python<'py>,
+    data: &Bound<'py, PyAny>,
+    random: &Bound<'py, PyAny>,
+    recipients: Option<&Bound<'py, PyAny>>,
+    passphrase: Option<&str>,
+    work_factor: i64,
+) -> PyResult<Bound<'py, PyBytes>> {
+    let d = bytes_arg(data, "data")?;
+    let r = bytes_arg(random, "random")?;
+    let pks: Vec<[u8; 32]> = str_list(recipients, "recipients")?
+        .iter()
+        .map(|s| age::parse_recipient(s).map_err(PyValueError::new_err))
+        .collect::<PyResult<_>>()?;
+    let pw = match passphrase {
+        Some(p) => Some((p, work_factor_arg(work_factor, "work_factor")?)),
+        None => None,
+    };
+    let out = age::age_encrypt(d.as_bytes(), &pks, pw, r.as_bytes()).map_err(PyValueError::new_err)?;
+    Ok(PyBytes::new(py, &out))
+}
+
+/// Internal: how many random bytes `age_encrypt` needs.
+#[pyfunction]
+#[pyo3(signature = (recipients=0, passphrase=false))]
+fn age_random_len(recipients: usize, passphrase: bool) -> usize {
+    age::random_len(recipients, passphrase)
+}
+
+/// Internal: the `age1...` recipient of an `AGE-SECRET-KEY-1...` identity.
+#[pyfunction]
+fn age_recipient(identity: &str) -> PyResult<String> {
+    let id = age::parse_identity(identity).map_err(PyValueError::new_err)?;
+    Ok(age::recipient_of(&id))
+}
+
+/// Internal: the identity text for 32 secret bytes (for deterministic tests).
+#[pyfunction]
+fn age_identity(secret: &Bound<'_, PyAny>) -> PyResult<String> {
+    let b = bytes_arg(secret, "secret")?;
+    let arr: [u8; 32] = b.as_bytes().try_into().map_err(|_| PyValueError::new_err("secret must be 32 bytes"))?;
+    Ok(age::identity_text(&arr))
+}
+
+/// Internal: decrypt a `.mdq.age` package and open it.
+#[pyfunction]
+#[pyo3(signature = (data, identities=None, passphrase=None, limits=None, max_work_factor=20))]
+fn package_open_age<'py>(
+    py: Python<'py>,
+    data: &Bound<'py, PyAny>,
+    identities: Option<&Bound<'py, PyAny>>,
+    passphrase: Option<&str>,
+    limits: Option<&Bound<'py, PyAny>>,
+    max_work_factor: i64,
+) -> PyResult<Bound<'py, PyDict>> {
+    let d = bytes_arg(data, "data")?;
+    let ids = identities_arg(identities)?;
+    let wf = work_factor_arg(max_work_factor, "max_work_factor")?;
+    let l = zip_limits_arg(limits)?;
+    let p = wrap(py, manifest::package_open_age(d.as_bytes(), &ids, passphrase, wf, &l))?;
+    package_to_py(py, &p)
 }
 
 /// Internal: profiles this build implements.
@@ -1663,6 +1790,12 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(zip_read, &internal)?)?;
     internal.add_function(wrap_pyfunction!(manifest_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(package_open, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(age_decrypt, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(age_encrypt, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(age_random_len, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(age_recipient, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(age_identity, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(package_open_age, &internal)?)?;
     internal.add_function(wrap_pyfunction!(attrs_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_eval, &internal)?)?;

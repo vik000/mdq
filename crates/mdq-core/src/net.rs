@@ -84,11 +84,11 @@ pub fn ip_is_blocked(ip: &Ip) -> bool {
     }
 }
 
-fn v4_text(n: u32) -> String {
+pub(crate) fn v4_text(n: u32) -> String {
     format!("{}.{}.{}.{}", n >> 24, (n >> 16) & 255, (n >> 8) & 255, n & 255)
 }
 
-fn v6_text(h: &[u16; 8]) -> String {
+pub(crate) fn v6_text(h: &[u16; 8]) -> String {
     let (mut best_start, mut best_len) = (0usize, 0usize);
     let mut i = 0;
     while i < 8 {
@@ -138,7 +138,7 @@ fn v4_part(p: &str) -> Option<u64> {
     u64::from_str_radix(s, base).ok()
 }
 
-fn ends_in_number(label: &str) -> bool {
+pub(crate) fn ends_in_number(label: &str) -> bool {
     if !label.is_empty() && label.bytes().all(|c| c.is_ascii_digit()) {
         return true;
     }
@@ -149,7 +149,7 @@ fn invalid(msg: &str) -> Diagnostic {
     Diagnostic::new(Code::SourceInvalid, msg)
 }
 
-fn denied(msg: &str) -> Diagnostic {
+pub(crate) fn denied(msg: &str) -> Diagnostic {
     Diagnostic::new(Code::SecurityDenied, msg)
 }
 
@@ -162,8 +162,27 @@ pub struct Classified {
     pub origin: String,
 }
 
+/// A parsed URL; `blocked` carries the reason when the host is in a blocked range or name.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Parts {
+    pub host: String,
+    pub kind: &'static str,
+    pub port: u16,
+    pub origin: String,
+    pub blocked: Option<&'static str>,
+}
+
 /// Classify an absolute URL. Messages never contain parts of the URL.
 pub fn url_classify(url: &str) -> Res<Classified> {
+    let p = url_parts(url)?;
+    if let Some(why) = p.blocked {
+        return Err(denied(why));
+    }
+    Ok(Classified { host: p.host, kind: p.kind, port: p.port, origin: p.origin })
+}
+
+/// Parse an absolute https URL (scheme, credentials and form errors fail; a blocked host is reported in `blocked`).
+pub fn url_parts(url: &str) -> Res<Parts> {
     if url.chars().count() > MAX_URL {
         return Err(Diagnostic::new(Code::ResourceLimit, format!("URL is longer than {MAX_URL} characters")));
     }
@@ -221,12 +240,10 @@ pub fn url_classify(url: &str) -> Res<Classified> {
         let Some(Ip::V6(h)) = ip else {
             return Err(invalid("invalid IPv6 address"));
         };
-        if v6_blocked(&h) {
-            return Err(denied("the host is in a blocked address range"));
-        }
+        let blocked = if v6_blocked(&h) { Some("the host is in a blocked address range") } else { None };
         let host = v6_text(&h);
         let origin = format!("https://[{host}]:{port}");
-        return Ok(Classified { host, kind: "ipv6", port, origin });
+        return Ok(Parts { host, kind: "ipv6", port, origin, blocked });
     }
     if hostpart.contains(|c| matches!(c, '%' | '[' | ']' | ':')) {
         return Err(invalid("invalid host"));
@@ -236,6 +253,7 @@ pub fn url_classify(url: &str) -> Res<Classified> {
         return Err(invalid("the URL has no host"));
     }
     let labels: Vec<&str> = h.split('.').collect();
+    let mut blocked = None;
     let (host, kind) = if ends_in_number(labels[labels.len() - 1]) {
         if labels.len() > 4 {
             return Err(invalid("invalid IPv4 address"));
@@ -255,7 +273,7 @@ pub fn url_classify(url: &str) -> Res<Classified> {
         }
         let n = n as u32;
         if v4_blocked(n) {
-            return Err(denied("the host is in a blocked address range"));
+            blocked = Some("the host is in a blocked address range");
         }
         (v4_text(n), "ipv4")
     } else {
@@ -270,10 +288,10 @@ pub fn url_classify(url: &str) -> Res<Classified> {
             return Err(invalid("invalid host name"));
         }
         if !h.contains('.') || BLOCKED_SUFFIXES.iter().any(|s| h == *s || h.ends_with(&format!(".{s}"))) {
-            return Err(denied("the host name is not allowed"));
+            blocked = Some("the host name is not allowed");
         }
         (h, "name")
     };
     let origin = format!("https://{host}:{port}");
-    Ok(Classified { host, kind, port, origin })
+    Ok(Parts { host, kind, port, origin, blocked })
 }

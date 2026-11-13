@@ -2,6 +2,22 @@
 
 Per feature. Veto by editing or telling me. Test-plan gap rows (G-numbers) in `docs/TEST_PLAN.md` hold the full wording.
 
+## E6.4 network policy (G45)
+**Decisions**
+- Network is allowed only if reader/user AND library layers both say allow; a missing layer or key means deny.
+- Documents can only request `network` (none/optional/required) and `hosts`; any other key is an error (never silently ignored).
+- `required` is only a flag; a denial stays a denial (MDQ_SECURITY_DENIED).
+- Host patterns: exact, canonical IP literal, or `*.suffix` (>= 2 labels; never matches the apex or an IP).
+- `private_endpoints` must be listed by both trusted layers; an allowlist never bypasses IP rules.
+- Defaults: port 443 only, 1 MiB, 10 s, 0 redirects, 4 concurrent; hard caps 16 MiB, 60 s, 5, 16 (clamped).
+- Malformed policy = MDQ_SOURCE_INVALID ("invalid policy: ...").
+
+**Sacrifices**
+- Policy dicts, not YAML; no per-host limits.
+
+**Open**
+- Per-host ports/limits; whether the library should ship a default allowlist.
+
 ## E6.3 URL and IP classification (G44, resolves G10)
 **Decisions**
 - CGNAT 100.64/10 blocked; also Azure 168.63.129.16, documentation, benchmark, reserved and 6to4-relay ranges.

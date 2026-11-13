@@ -121,3 +121,16 @@ value_type_check = _i.value_type_check
 # E6.3 URL and IP classification
 ip_is_blocked = _i.ip_is_blocked
 url_classify = _i.url_classify
+
+# E6.4 network policy
+policy_intersect = _i.policy_intersect
+
+
+def policy_decide(policy, url, redirect_count=0):
+    # PyO3 would accept bool and reject negatives with OverflowError; the contract is TypeError for both.
+    if isinstance(redirect_count, bool) or not isinstance(redirect_count, int) or redirect_count < 0:
+        raise TypeError("redirect_count must be a non-negative int")
+    return _i.policy_decide(policy, url, redirect_count)
+
+
+policy_ip_allowed = _i.policy_ip_allowed

@@ -3,7 +3,7 @@
 Updated with every commit. Estimates are in sessions (one session = one feature cycle: Rust, shim check, tests,
 commit message), rough, about ±50%. Feature definitions and tests: `docs/TEST_PLAN.md` section 4.
 
-**Last update:** E6.3 done in shim (Rust not compiled; E5.3–E6.2 unconfirmed natively); E4.3–E5.2b built green natively.
+**Last update:** E6.4 built natively (4310 passed, 1 hook fix pending rerun); E4.3–E6.3 built green natively.
 
 ## Status
 
@@ -16,11 +16,11 @@ commit message), rough, about ±50%. Feature definitions and tests: `docs/TEST_P
 | Build | done | Rust of E1.6–E3.2 compiles; all tests pass | | 0 |
 | 4 Composition and references (F04–F07) | done | E4.1 paths and confinement ✔, E4.2 heading text/slugs/dedupe ✔, E4.3 block IDs and `resolve_ref` ✔, E4.4 import expansion ✔, E4.5 link rebasing ✔ | | 0 |
 | 5 Rich features and export (F10, F23) | done (shim; E5.3–E5.4 Rust not compiled) | E5.1 highlight/callout/details/columns ✔, E5.2a math/footnotes ✔, E5.2b citations ✔, E5.3 TOC ✔, E5.4 `export_markdown` ✔ (shim; Rust not compiled) | | 0 |
-| 6 Sources and policy (F16–F19) | in progress | E6.1 declarations and URL templates ✔, E6.2 JSON Pointer and types ✔ (shim; Rust not compiled), E6.3 URL/IP classification ✔ (shim; Rust not compiled), E6.4 policy, E6.5 resolver and fake transport | | 3.5 |
-| 7 Packages and encryption (F20, F21) | not started | E7.1 hostile-zip reader, E7.2 manifest, E7.3 age | | 3.5 |
+| 6 Sources and policy (F16–F19) | in progress | E6.1 declarations and URL templates ✔, E6.2 JSON Pointer and types ✔ (shim; Rust not compiled), E6.3 URL/IP classification ✔ (shim; Rust not compiled), E6.4 policy ✔ (shim; Rust not compiled), E6.5 resolver and fake transport | | 2.5 |
+| 7 Packages and encryption (F20, F21) | not started | E7.1 hostile-zip reader, E7.2 manifest, E7.3 age | | 2.5 |
 | 8 API, CLI, packaging (F25, F26) | not started | E8.1 `compile`, E8.2 typing/threads/memory, E8.3 CLI, E8.4 wheel smoke test | | 6 |
 | Cross-cutting | open | rule ledger and conformance fixtures, CI (incl. `HYPOTHESIS_PROFILE=ci`), Rust coverage, sdist fix (`include_str!("../../../spec/units.tsv")`) | | 3 |
-| **Total** | | | | **about 19** |
+| **Total** | | | | **about 18** |
 
 At the pace so far (12 commits), 36 sessions is roughly 6–9 working days, not weeks; build-error rounds add to that.
 
@@ -34,4 +34,4 @@ At the pace so far (12 commits), 36 sessions is roughly 6–9 working days, not 
 
 ## Next
 
-1. E6.4 policy (`policy_intersect`, `policy_decide`). G16 still open.
+1. E6.5 resolver and fake transport (`test_source`, snapshots; first feature that needs a callable transport). G16 still open.

@@ -22,6 +22,7 @@ use mdq_core::source;
 use mdq_core::meta;
 use mdq_core::net;
 use mdq_core::paths;
+use mdq_core::policy;
 use mdq_core::diag::{Code, Diagnostic};
 use mdq_core::units;
 use mdq_core::utf8;
@@ -973,6 +974,128 @@ fn url_classify<'py>(py: Python<'py>, url: &str) -> PyResult<Bound<'py, PyDict>>
     Ok(d)
 }
 
+fn to_pval(v: &Bound<'_, PyAny>) -> PyResult<policy::PVal> {
+    use policy::PVal;
+    if v.is_none() {
+        return Ok(PVal::None);
+    }
+    if v.downcast::<PyBool>().is_ok() {
+        return Ok(PVal::Bool(v.is_truthy()?));
+    }
+    if v.downcast::<PyInt>().is_ok() {
+        return Ok(PVal::Int(match v.extract::<i64>() {
+            Ok(n) => n,
+            Err(_) => {
+                if v.lt(0)? {
+                    i64::MIN
+                } else {
+                    i64::MAX
+                }
+            }
+        }));
+    }
+    if let Ok(s) = v.downcast::<PyString>() {
+        return Ok(PVal::Str(s.to_string()));
+    }
+    if let Ok(l) = v.downcast::<PyList>() {
+        return Ok(PVal::List(l.iter().map(|x| to_pval(&x)).collect::<PyResult<_>>()?));
+    }
+    if let Ok(t) = v.downcast::<PyTuple>() {
+        return Ok(PVal::List(t.iter().map(|x| to_pval(&x)).collect::<PyResult<_>>()?));
+    }
+    if let Ok(d) = v.downcast::<PyDict>() {
+        return Ok(PVal::Map(to_map(d)?));
+    }
+    Ok(PVal::Other)
+}
+
+fn to_map(d: &Bound<'_, PyDict>) -> PyResult<Vec<(String, policy::PVal)>> {
+    let mut out = Vec::new();
+    for (k, v) in d.iter() {
+        let key = k
+            .downcast::<PyString>()
+            .map_err(|_| PyTypeError::new_err("policy keys must be str"))?
+            .to_string();
+        out.push((key, to_pval(&v)?));
+    }
+    Ok(out)
+}
+
+fn layer_arg(v: Option<&Bound<'_, PyAny>>, what: &str) -> PyResult<Option<Vec<(String, policy::PVal)>>> {
+    match v {
+        None => Ok(None),
+        Some(x) if x.is_none() => Ok(None),
+        Some(x) => match x.downcast::<PyDict>() {
+            Ok(d) => Ok(Some(to_map(d)?)),
+            Err(_) => Err(PyTypeError::new_err(format!("{what} must be a dict"))),
+        },
+    }
+}
+
+fn limits_dict<'py>(py: Python<'py>, l: &[u64; 4]) -> PyResult<Bound<'py, PyDict>> {
+    let d = PyDict::new(py);
+    d.set_item("max_bytes", l[0])?;
+    d.set_item("timeout", l[1])?;
+    d.set_item("max_redirects", l[2])?;
+    d.set_item("max_concurrency", l[3])?;
+    Ok(d)
+}
+
+#[pyfunction]
+#[pyo3(signature = (host=None, library=None, document=None))]
+fn policy_intersect<'py>(
+    py: Python<'py>,
+    host: Option<&Bound<'py, PyAny>>,
+    library: Option<&Bound<'py, PyAny>>,
+    document: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let h = layer_arg(host, "a policy layer")?;
+    let l = layer_arg(library, "a policy layer")?;
+    let d = layer_arg(document, "the document request")?;
+    let e = wrap(py, policy::policy_intersect(h.as_deref(), l.as_deref(), d.as_deref()))?;
+    let out = PyDict::new(py);
+    out.set_item("network", if e.network_allow { "allow" } else { "deny" })?;
+    out.set_item("hosts", e.hosts)?;
+    out.set_item("ports", e.ports)?;
+    out.set_item("private_endpoints", e.private_endpoints)?;
+    for (k, v) in [("max_bytes", e.limits[0]), ("timeout", e.limits[1]), ("max_redirects", e.limits[2]), ("max_concurrency", e.limits[3])] {
+        out.set_item(k, v)?;
+    }
+    out.set_item("network_required", e.network_required)?;
+    Ok(out)
+}
+
+#[pyfunction]
+#[pyo3(signature = (policy, url, redirect_count=0))]
+fn policy_decide<'py>(
+    py: Python<'py>,
+    policy: &Bound<'py, PyDict>,
+    url: &str,
+    redirect_count: u64,
+) -> PyResult<Bound<'py, PyDict>> {
+    let p = to_map(policy)?;
+    let r = wrap(py, policy::policy_decide(&p, url, redirect_count))?;
+    let d = PyDict::new(py);
+    d.set_item("allow", true)?;
+    d.set_item("scheme", "https")?;
+    d.set_item("host", r.host)?;
+    d.set_item("kind", r.kind)?;
+    d.set_item("port", r.port)?;
+    d.set_item("origin", r.origin)?;
+    d.set_item("private", r.private)?;
+    d.set_item("limits", limits_dict(py, &r.limits)?)?;
+    Ok(d)
+}
+
+#[pyfunction]
+fn policy_ip_allowed(py: Python<'_>, policy: &Bound<'_, PyDict>, host: &str, address: &str) -> PyResult<bool> {
+    let p = to_map(policy)?;
+    match wrap(py, policy::policy_ip_allowed(&p, host, address))? {
+        Some(b) => Ok(b),
+        None => Err(PyValueError::new_err("not an IP address literal")),
+    }
+}
+
 fn attrs_dict<'py>(py: Python<'py>, attrs: Vec<(String, String)>) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
     for (k, v) in attrs {
@@ -1168,6 +1291,9 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(value_type_check, &internal)?)?;
     internal.add_function(wrap_pyfunction!(ip_is_blocked, &internal)?)?;
     internal.add_function(wrap_pyfunction!(url_classify, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(policy_intersect, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(policy_decide, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(policy_ip_allowed, &internal)?)?;
     internal.add_function(wrap_pyfunction!(attrs_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_eval, &internal)?)?;

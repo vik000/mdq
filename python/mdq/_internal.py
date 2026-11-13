@@ -100,3 +100,10 @@ columns_fallback = _i.columns_fallback
 math_fallback = _i.math_fallback
 footnote_check = _i.footnote_check
 footnote_rename = _i.footnote_rename
+
+# E5.2b citations
+bib_parse = _i.bib_parse
+citation_resolve = _i.citation_resolve
+
+# E5.3 table of contents
+toc_build = _i.toc_build

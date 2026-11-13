@@ -13,6 +13,7 @@ use mdq_core::fx;
 use mdq_core::headings;
 use mdq_core::imports;
 use mdq_core::links;
+use mdq_core::cite;
 use mdq_core::notes;
 use mdq_core::refs;
 use mdq_core::rich;
@@ -24,7 +25,7 @@ use mdq_core::utf8;
 use mdq_core::vars;
 use mdq_core::version;
 use mdq_core::yaml;
-use pyo3::exceptions::{PyException, PyTypeError};
+use pyo3::exceptions::{PyException, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyInt, PyList, PyString, PyTuple};
 
@@ -747,6 +748,52 @@ fn footnote_rename(py: Python<'_>, text: &str, scope: &str) -> PyResult<String> 
     wrap(py, notes::footnote_rename(text, scope))
 }
 
+fn parse_format(s: &str) -> PyResult<cite::Format> {
+    cite::Format::parse(s).ok_or_else(|| PyValueError::new_err("format must be 'bibtex' or 'csl-json'"))
+}
+
+#[pyfunction]
+fn bib_parse<'py>(py: Python<'py>, text: &str, format: &str) -> PyResult<Bound<'py, PyList>> {
+    let f = parse_format(format)?;
+    let entries = wrap(py, cite::bib_parse(text, f))?;
+    let list = PyList::empty(py);
+    for e in &entries {
+        let d = PyDict::new(py);
+        d.set_item("key", &e.key)?;
+        d.set_item("type", &e.typ)?;
+        let authors = PyList::empty(py);
+        for a in &e.authors {
+            let n = PyDict::new(py);
+            n.set_item("family", &a.family)?;
+            n.set_item("given", &a.given)?;
+            authors.append(n)?;
+        }
+        d.set_item("authors", authors)?;
+        d.set_item("et_al", e.et_al)?;
+        d.set_item("year", &e.year)?;
+        d.set_item("title", &e.title)?;
+        d.set_item("container", &e.container)?;
+        list.append(d)?;
+    }
+    Ok(list)
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, bibs, first_line=1))]
+fn citation_resolve(py: Python<'_>, text: &str, bibs: Vec<(String, String)>, first_line: u32) -> PyResult<String> {
+    let mut v = Vec::new();
+    for (f, t) in bibs {
+        v.push((parse_format(&f)?, t));
+    }
+    wrap(py, cite::citation_resolve(text, &v, first_line))
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, first_line=1))]
+fn toc_build(py: Python<'_>, text: &str, first_line: u32) -> PyResult<String> {
+    wrap(py, rich::toc_build(text, first_line))
+}
+
 fn attrs_dict<'py>(py: Python<'py>, attrs: Vec<(String, String)>) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
     for (k, v) in attrs {
@@ -950,6 +997,9 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(import_expand, &internal)?)?;
     internal.add_function(wrap_pyfunction!(rebase_link, &internal)?)?;
     internal.add_function(wrap_pyfunction!(rebase_links, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(toc_build, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(bib_parse, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(citation_resolve, &internal)?)?;
     internal.add_function(wrap_pyfunction!(math_fallback, &internal)?)?;
     internal.add_function(wrap_pyfunction!(footnote_check, &internal)?)?;
     internal.add_function(wrap_pyfunction!(footnote_rename, &internal)?)?;

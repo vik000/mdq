@@ -285,3 +285,40 @@ pub fn details_fallback(text: &str, first_line: u32) -> Res<String> {
 pub fn columns_fallback(text: &str, first_line: u32) -> Res<String> {
     walk(text, first_line, Mode::Columns)
 }
+
+/// Replace every paragraph that is exactly `[[toc]]` at column 1 by a nested list of links to the
+/// headings of `text` (G40 in docs/TEST_PLAN.md). Slugs follow G33.
+pub fn toc_build(text: &str, first_line: u32) -> Res<String> {
+    use crate::headings::{percent_encode_anchor, slug_dedupe, slugify};
+    check(text)?;
+    let heads = crate::refs::build(text, first_line)?.headings;
+    let slugs = slug_dedupe(&heads.iter().map(|h| slugify(&h.text)).collect::<Vec<_>>(), &[]);
+    let mut lines: Vec<String> = Vec::new();
+    let mut stack: Vec<usize> = Vec::new();
+    for (h, sl) in heads.iter().zip(&slugs) {
+        while stack.last().is_some_and(|&l| l >= h.level) {
+            stack.pop();
+        }
+        let label = if h.text.is_empty() { sl.clone() } else { escape_inline(&h.text, false)? };
+        lines.push(format!("{}- [{}](#{})", "  ".repeat(stack.len()), label, percent_encode_anchor(sl)));
+        stack.push(h.level);
+    }
+    let c: Vec<char> = text.chars().collect();
+    let (starts, ends) = line_bounds(&c);
+    let leaves = parse(&c, &starts, &ends, 1)?;
+    let eol: &str = match c.iter().position(|&x| x == '\r' || x == '\n') {
+        Some(p) if c[p] == '\r' && c.get(p + 1) == Some(&'\n') => "\r\n",
+        Some(p) if c[p] == '\r' => "\r",
+        _ => "\n",
+    };
+    let mut edits: Vec<crate::links::Edit> = Vec::new();
+    for leaf in &leaves {
+        if leaf.kind == Kind::Paragraph && leaf.segments.len() == 1 {
+            let (x, y) = leaf.segments[0];
+            if x == starts[leaf.first_line] && c[x..y].iter().collect::<String>().trim_matches(|z| z == ' ' || z == '\t') == "[[toc]]" {
+                edits.push(crate::links::Edit { start: x, end: y, text: lines.join(eol) });
+            }
+        }
+    }
+    Ok(crate::links::apply_edits(&c, 0, c.len(), &edits))
+}

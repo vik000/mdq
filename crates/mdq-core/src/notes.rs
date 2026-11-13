@@ -46,15 +46,49 @@ fn skip_code_span(c: &[char], i: usize, n: usize) -> usize {
 
 /// Inline maths spans in leaf text: (open, open_len, close, close_len).
 fn math_spans(c: &[char]) -> Vec<(usize, usize, usize, usize)> {
+    math_scan(c).spans
+}
+
+/// What the maths scan saw, beyond the spans themselves: the backticks around them.
+///
+/// A new code-span delimiter must not pair with, or merge into, a backtick already in the text:
+/// - `stray_len`: lengths of UNMATCHED (literal) backtick runs; the delimiter width avoids them
+///   (`` `a $b$ c `` must not become `` `a `b` c ``, which renders as code `a `);
+/// - `stray_pos` / `code_pos`: positions of those literal backticks and of the delimiters of real
+///   code spans. A maths span TOUCHING either is refused: the new delimiter would merge with that
+///   run (`` `$a$ `` would give `` ```a`` ``). Escaping cannot repair it in general, because an
+///   escaped backtick can still close an earlier code span (`` `a``$a$ ``).
+struct Scan {
+    spans: Vec<(usize, usize, usize, usize)>,
+    stray_len: HashSet<usize>,
+    stray_pos: HashSet<usize>,
+    code_pos: HashSet<usize>,
+}
+
+fn math_scan(c: &[char]) -> Scan {
     let n = c.len();
     let mut out = Vec::new();
+    let mut stray_len = HashSet::new();
+    let mut stray_pos = HashSet::new();
+    let mut code_pos = HashSet::new();
     let mut i = 0;
     while i < n {
         let ch = c[i];
         if ch == '\\' {
             i += if i + 1 < n && (c[i + 1].is_ascii_punctuation() || c[i + 1] == '\n') { 2 } else { 1 };
         } else if ch == '`' {
-            i = skip_code_span(c, i, n);
+            let end = skip_code_span(c, i, n);
+            // `skip_code_span` stops right after the opening run when nothing closes it.
+            if c[i..end].iter().all(|&x| x == '`') {
+                stray_len.insert(end - i);
+                stray_pos.extend(i..end);
+            } else {
+                // A real code span: remember its opening and closing runs (same length).
+                let run = c[i..end].iter().take_while(|&&x| x == '`').count();
+                code_pos.extend(i..i + run);
+                code_pos.extend(end - run..end);
+            }
+            i = end;
         } else if ch == '<' {
             i = html_inline_end(c, i, n).unwrap_or(i + 1);
         } else if ch == ']' {
@@ -99,7 +133,7 @@ fn math_spans(c: &[char]) -> Vec<(usize, usize, usize, usize)> {
             i += 1;
         }
     }
-    out
+    Scan { spans: out, stray_len, stray_pos, code_pos }
 }
 
 /// The output must be a fixed point: running the fallback on it again changes nothing.
@@ -254,13 +288,33 @@ pub fn math_fallback(text: &str, first_line: u32) -> Res<String> {
             if !group.is_empty() {
                 let (s, origin) = leaf_text(&c, &group);
                 // Each span with its code-span delimiter: (open, open_len, close, close_len, width, pad).
-                let spans: Vec<(usize, usize, usize, usize, usize, &str)> = math_spans(&s)
-                    .into_iter()
+                let scan = math_scan(&s);
+                // A span touching a literal backtick or a code-span delimiter is refused (see `Scan`).
+                for &(o, _, q, m) in &scan.spans {
+                    let left = (0..o).rev().take_while(|&k| s[k] == '`');
+                    let right = (q + m..s.len()).take_while(|&k| s[k] == '`');
+                    for k in left.chain(right) {
+                        if scan.code_pos.contains(&k) || scan.stray_pos.contains(&k) {
+                            let at = origin[o];
+                            let line = starts.partition_point(|&st| st <= at) - 1;
+                            return Err(Diagnostic::new(
+                                Code::UnsupportedFeature,
+                                "inline maths directly next to a backtick cannot be turned into a code span",
+                            )
+                            .at_position(first_line + line as u32, (at - starts[line] + 1) as u32));
+                        }
+                    }
+                }
+                let stray = &scan.stray_len;
+                let spans: Vec<(usize, usize, usize, usize, usize, &str)> = scan
+                    .spans
+                    .iter()
+                    .copied()
                     .map(|(o, r, q, m)| {
                         let body = &s[o + r..q];
                         let runs = bt_runs(body);
                         let mut w = 1;
-                        while runs.contains(&w) {
+                        while runs.contains(&w) || stray.contains(&w) {
                             w += 1;
                         }
                         let pad = if body[0] == '`' || body[body.len() - 1] == '`' { " " } else { "" };

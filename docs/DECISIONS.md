@@ -22,15 +22,24 @@ Per feature. Veto by editing or telling me. Test-plan gap rows (G-numbers) in `d
 **Open**
 - Per-member encryption layout (spec gap 4): strict xfail `test_per_member_encryption_layout`.
 
+## Fix: E5.2a maths fallback, backticks (G38)
+**Decisions**
+- The inline code-span delimiter avoids the length of every unmatched (literal) backtick run in the paragraph, not just runs in the maths body: `` `a $b$ c `` becomes `` `a ``b`` c `` (before: `` `a `b` c ``, which rendered as code `a `). Matched code spans are ignored, so existing outputs such as `` `code` and `x` `` are unchanged.
+- An inline span directly touching a backtick (literal run or code-span delimiter) is MDQ_UNSUPPORTED_FEATURE at the opener's position: the new delimiter would merge with that run. Escaping was tried and rejected: an escaped backtick can still close an earlier code span (`` `a``$a$ ``). An escaped backtick next to maths is fine.
+- New property test: the CommonMark-rendered text of the output equals the input's minus `$` (40,000 examples clean).
+
+**Sacrifices**
+- `` `$a$ `` or `` `x`$a$ `` (maths glued to a backtick) cannot be exported; the author must add a space.
+
+**Open**
+- Maths overlapping a code span (`` $`$` ``): Pandoc rules (G38) read maths, CommonMark reads a code span. Current behaviour: maths wins. Strict xfail `test_math_overlapping_a_code_span`. Which should win?
+
 ## Fix: E5.2a maths fallback output is a fixed point (G38)
 **Decisions**
 - Found by Hypothesis (`$$a\n$$a$$a$$`): a `$` run that failed to open a span (its first following `$` follows a line break) could pair on a second pass once a later span had become a code span. Such runs are now escaped as `\$`, only when the re-scan of the output would pair them (loop until nothing pairs). `$a $b$` stays `$a `b``.
 
 **Sacrifices**
 - Output may contain `\$` where the input had `$`; renders identically in CommonMark.
-
-**Open**
-- CONFIRMED pre-existing bug, not fixed yet: new code-span backticks can pair with a stray backtick earlier in the paragraph: `` `a $b$ c `` becomes `` `a `b` c ``, which renders as code `a ` followed by text (silent change). Needs a fix (e.g. widen the delimiter past every backtick run in the paragraph, or escape stray backticks). Ruled out: a 3+ backtick delimiter at line start cannot open a fence (its info string always contains backticks).
 
 ## E7.2 package manifest (G48)
 **Decisions**

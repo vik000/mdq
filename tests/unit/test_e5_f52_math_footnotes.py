@@ -442,3 +442,53 @@ def test_math_output_is_a_fixed_point_regression(src, want):
     # the escapes are invisible once rendered: no backslash survives, every `$` is still shown
     html = MarkdownIt("commonmark").render(want)
     assert "\\" not in html and html.count("$") == want.count("$")
+
+
+# Regression (2026-11-13): the code-span delimiter that replaces `$...$` must not pair with, or merge into, a
+# backtick that is already in the paragraph. Unmatched (literal) backtick runs elsewhere are avoided by choosing
+# a different delimiter width; a span TOUCHING a backtick is refused, since no local repair is always correct.
+@pytest.mark.parametrize("src,want", [
+    ("`a $b$ c", "`a ``b`` c"),                 # stray run of 1: delimiter width 2
+    ("`` x $a`b$", "`` x ```a`b```"),           # stray 2, body run 1: width 3
+    ("$a$ ` $b$", "``a`` ` ``b``"),             # a stray run anywhere in the paragraph counts
+    ("`code` and $x$", "`code` and `x`"),       # matched code spans do not count
+    ("\\`$a$", "\\``a`"),                       # an escaped backtick is not a run
+])
+def test_math_delimiter_avoids_stray_backticks(src, want):
+    assert mf(src) == want and mf(want) == want
+
+
+@pytest.mark.parametrize("src,col", [("`$a$", 2), ("$a$`", 1), ("`x`$a$", 4), ("$a$`x`", 1), ("``$a$ x", 3),
+                                     ("`a``$a$", 5)])
+def test_math_touching_a_backtick_is_refused(assert_mdq_error, src, col):
+    with assert_mdq_error("MDQ_UNSUPPORTED_FEATURE", line=1, column=col):
+        mf(src)
+    with assert_mdq_error("MDQ_UNSUPPORTED_FEATURE", line=3, column=col):
+        mf("x\n\n" + src)
+
+
+def _visible(md, src):
+    h = re.sub(r"<[^>]+>", "", md.render(src))
+    import html as _html
+    return " ".join(_html.unescape(h).replace("$", "").split())
+
+
+@given(st.lists(st.sampled_from(["a", "b", "1", " ", "`", "``", "$", "$$", "\n"]), max_size=20).map("".join))
+def test_math_fallback_keeps_the_visible_text(s):
+    """Rendered with CommonMark, the output shows the same text as the input minus its `$` signs: literal
+    backticks stay literal and existing code spans are untouched. Inputs where maths and a code span overlap
+    are a spec gap (see the strict xfail below) and are skipped."""
+    if re.search(r"\$[^$]*`[^$]*\$", s):
+        return
+    try:
+        out = mf(s)
+    except mdq.MdqError as e:
+        assert e.code in ("MDQ_INVALID_SYNTAX", "MDQ_UNSUPPORTED_FEATURE")
+        return
+    md = MarkdownIt("commonmark")
+    assert _visible(md, out) == _visible(md, s)
+
+
+@pytest.mark.xfail(strict=True, reason="G38 open: maths overlapping a code span ($`$`): Pandoc reads maths, CommonMark a code span")
+def test_math_overlapping_a_code_span():
+    assert mf("$`$`") == "$`$`"

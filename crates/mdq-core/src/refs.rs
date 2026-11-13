@@ -74,13 +74,13 @@ fn marker(texts: &[Vec<char>]) -> Option<(String, usize)> {
     Some((last[j..t].iter().collect(), k))
 }
 
-struct Index {
-    headings: Vec<Heading>,
-    blocks: Vec<Block>,
-    end: usize,
+pub(crate) struct Index {
+    pub(crate) headings: Vec<Heading>,
+    pub(crate) blocks: Vec<Block>,
+    pub(crate) end: usize,
 }
 
-fn build(text: &str, first_line: u32) -> Res<Index> {
+pub(crate) fn build(text: &str, first_line: u32) -> Res<Index> {
     if text.len() > MAX_INPUT {
         return Err(Diagnostic::new(Code::ResourceLimit, "input is larger than 16 MiB"));
     }
@@ -183,6 +183,10 @@ pub fn resolve_ref(text: &str, fragment: &str, first_line: u32) -> Res<Resolved>
         return Err(Diagnostic::new(Code::ResourceLimit, "input is larger than 16 MiB"));
     }
     let ix = build(text, first_line)?;
+    resolve_in(&ix, fragment)
+}
+
+pub(crate) fn resolve_in(ix: &Index, fragment: &str) -> Res<Resolved> {
     if fragment.is_empty() {
         return Ok(Resolved { kind: "document", start_line: 0, end_line: ix.end, id: None, heading: None });
     }

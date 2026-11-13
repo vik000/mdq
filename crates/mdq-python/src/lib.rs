@@ -11,6 +11,7 @@ use mdq_core::calc::render;
 use mdq_core::frontmatter;
 use mdq_core::fx;
 use mdq_core::headings;
+use mdq_core::imports;
 use mdq_core::refs;
 use mdq_core::meta;
 use mdq_core::paths;
@@ -636,6 +637,59 @@ fn resolve_ref<'py>(py: Python<'py>, text: &str, fragment: &str, first_line: u32
     Ok(d)
 }
 
+#[pyfunction]
+#[pyo3(signature = (text, path, read, max_depth=64, max_expansions=10000, max_bytes=16777216))]
+fn import_expand<'py>(
+    py: Python<'py>,
+    text: &str,
+    path: &str,
+    read: &Bound<'py, PyAny>,
+    max_depth: usize,
+    max_expansions: usize,
+    max_bytes: usize,
+) -> PyResult<Bound<'py, PyDict>> {
+    if !read.is_callable() {
+        return Err(PyTypeError::new_err("read must be callable"));
+    }
+    let failure: std::cell::RefCell<Option<PyErr>> = std::cell::RefCell::new(None);
+    let mut reader = |p: &str| -> Result<Option<String>, Diagnostic> {
+        let sentinel = || Diagnostic::new(mdq_core::diag::Code::SourceFetchFailed, "read callback failed");
+        match read.call1((p,)) {
+            Err(e) => {
+                *failure.borrow_mut() = Some(e);
+                Err(sentinel())
+            }
+            Ok(v) if v.is_none() => Ok(None),
+            Ok(v) => match v.extract::<String>() {
+                Ok(s) => Ok(Some(s)),
+                Err(_) => {
+                    *failure.borrow_mut() = Some(PyTypeError::new_err("read() must return str or None"));
+                    Err(sentinel())
+                }
+            },
+        }
+    };
+    let limits = imports::Limits { max_depth, max_expansions, max_bytes };
+    let res = imports::import_expand(text, path, &mut reader, limits);
+    if let Some(e) = failure.borrow_mut().take() {
+        return Err(e);
+    }
+    let r = wrap(py, res)?;
+    let map = PyList::empty(py);
+    for m in &r.map {
+        let d = PyDict::new(py);
+        d.set_item("out_start", m.out_start)?;
+        d.set_item("out_end", m.out_end)?;
+        d.set_item("path", &m.path)?;
+        d.set_item("src_start", m.src_start)?;
+        map.append(d)?;
+    }
+    let out = PyDict::new(py);
+    out.set_item("text", r.text)?;
+    out.set_item("map", map)?;
+    Ok(out)
+}
+
 fn attrs_dict<'py>(py: Python<'py>, attrs: Vec<(String, String)>) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
     for (k, v) in attrs {
@@ -836,6 +890,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(percent_encode_anchor, &internal)?)?;
     internal.add_function(wrap_pyfunction!(doc_index, &internal)?)?;
     internal.add_function(wrap_pyfunction!(resolve_ref, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(import_expand, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_canonical, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_combine, &internal)?)?;
     m.add_submodule(&internal)?;

@@ -11,6 +11,7 @@ pub mod entities;
 pub mod frontmatter;
 pub mod fx;
 pub mod headings;
+pub mod imports;
 pub mod meta;
 pub mod paths;
 pub mod refs;

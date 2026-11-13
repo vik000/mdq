@@ -82,3 +82,6 @@ percent_encode_anchor = _i.percent_encode_anchor
 # E4.3 document index and references
 doc_index = _i.doc_index
 resolve_ref = _i.resolve_ref
+
+# E4.4 import expansion
+import_expand = _i.import_expand

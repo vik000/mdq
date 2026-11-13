@@ -176,6 +176,10 @@ def test_blocks_match_markdown_it(lines):
 @given(st.lists(st.sampled_from(LINES), min_size=1, max_size=14), st.sampled_from(["\n", "\r\n", "\r"]))
 def test_blocks_match_markdown_it_with_any_line_end(lines, eol):
     src = eol.join(lines)
+    if lines[-1].strip(" >") == "":
+        # markdown-it drops a final empty quoted line that has no line end (`> ```\n>`);
+        # CommonMark keeps it, so give that line its terminator for the comparison.
+        src += eol
     assert mine(src) == leaf_blocks(src), repr(src)
 
 

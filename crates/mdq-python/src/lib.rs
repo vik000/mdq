@@ -10,6 +10,7 @@ use mdq_core::dim;
 use mdq_core::calc::render;
 use mdq_core::frontmatter;
 use mdq_core::fx;
+use mdq_core::headings;
 use mdq_core::meta;
 use mdq_core::paths;
 use mdq_core::diag::{Code, Diagnostic};
@@ -553,6 +554,34 @@ fn path_confine(py: Python<'_>, root: &str, rel: &str) -> PyResult<String> {
     wrap(py, paths::path_confine(root, rel))
 }
 
+#[pyfunction]
+#[pyo3(signature = (inline, atx=false))]
+fn heading_plain_text(py: Python<'_>, inline: &str, atx: bool) -> PyResult<String> {
+    wrap(py, headings::heading_plain_text(inline, atx))
+}
+
+#[pyfunction]
+#[pyo3(signature = (headings, target, atx=false))]
+fn heading_match(py: Python<'_>, headings: Vec<String>, target: &str, atx: bool) -> PyResult<Option<usize>> {
+    wrap(py, headings::heading_match(&headings, target, atx))
+}
+
+#[pyfunction]
+fn slugify(text: &str) -> String {
+    headings::slugify(text)
+}
+
+#[pyfunction]
+#[pyo3(signature = (slugs, reserved=None))]
+fn slug_dedupe(slugs: Vec<String>, reserved: Option<Vec<String>>) -> Vec<String> {
+    headings::slug_dedupe(&slugs, &reserved.unwrap_or_default())
+}
+
+#[pyfunction]
+fn percent_encode_anchor(text: &str) -> String {
+    headings::percent_encode_anchor(text)
+}
+
 fn attrs_dict<'py>(py: Python<'py>, attrs: Vec<(String, String)>) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
     for (k, v) in attrs {
@@ -746,6 +775,11 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(path_normalise, &internal)?)?;
     internal.add_function(wrap_pyfunction!(path_identity, &internal)?)?;
     internal.add_function(wrap_pyfunction!(path_confine, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(heading_plain_text, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(heading_match, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(slugify, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(slug_dedupe, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(percent_encode_anchor, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_canonical, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_combine, &internal)?)?;
     m.add_submodule(&internal)?;

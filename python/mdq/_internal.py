@@ -71,3 +71,10 @@ container_eval = _i.container_eval
 path_normalise = _i.path_normalise
 path_identity = _i.path_identity
 path_confine = _i.path_confine
+
+# E4.2 heading identity and anchors
+heading_plain_text = _i.heading_plain_text
+heading_match = _i.heading_match
+slugify = _i.slugify
+slug_dedupe = _i.slug_dedupe
+percent_encode_anchor = _i.percent_encode_anchor

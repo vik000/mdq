@@ -412,7 +412,7 @@ pub(crate) fn tag_end(c: &[char], i: usize, b: usize) -> Option<usize> {
 }
 
 /// End (exclusive) of inline raw HTML or an autolink starting at `i` (`<`).
-fn html_inline_end(c: &[char], i: usize, b: usize) -> Option<usize> {
+pub(crate) fn html_inline_end(c: &[char], i: usize, b: usize) -> Option<usize> {
     if starts_with(c, i, b, "<!--") {
         if starts_with(c, i, b, "<!-->") {
             return Some(i + 5);

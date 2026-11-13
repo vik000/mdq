@@ -130,7 +130,7 @@ struct Embed {
 const PUNCT: &str = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
 
 /// Embeds `![[inner]]` in a leaf's text, outside code spans, escapes and inline HTML.
-fn find_embeds(s: &[char]) -> Vec<(usize, usize, String)> {
+pub(crate) fn find_embeds(s: &[char]) -> Vec<(usize, usize, String)> {
     let n = s.len();
     let mut out = Vec::new();
     let mut i = 0;

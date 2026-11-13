@@ -7,6 +7,7 @@ use mdq_core::calc::lexer;
 use mdq_core::calc::parser::{self, Expr, ExprKind};
 use mdq_core::decimal;
 use mdq_core::dim;
+use mdq_core::export;
 use mdq_core::calc::render;
 use mdq_core::frontmatter;
 use mdq_core::fx;
@@ -794,6 +795,30 @@ fn toc_build(py: Python<'_>, text: &str, first_line: u32) -> PyResult<String> {
     wrap(py, rich::toc_build(text, first_line))
 }
 
+#[pyfunction]
+#[pyo3(signature = (text, first_line=1))]
+fn generic_fallback(py: Python<'_>, text: &str, first_line: u32) -> PyResult<String> {
+    wrap(py, rich::generic_fallback(text, first_line))
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, profile="commonmark", bibs=None, first_line=1))]
+fn export_markdown(
+    py: Python<'_>,
+    text: &str,
+    profile: &str,
+    bibs: Option<Vec<(String, String)>>,
+    first_line: u32,
+) -> PyResult<String> {
+    let profile = export::Profile::parse(profile)
+        .ok_or_else(|| PyValueError::new_err("profile must be 'commonmark' or 'gfm'"))?;
+    let mut v = Vec::new();
+    for (f, t) in bibs.unwrap_or_default() {
+        v.push((parse_format(&f)?, t));
+    }
+    wrap(py, export::export_markdown(text, profile, &v, first_line))
+}
+
 fn attrs_dict<'py>(py: Python<'py>, attrs: Vec<(String, String)>) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
     for (k, v) in attrs {
@@ -981,6 +1006,8 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(interpolate, &internal)?)?;
     internal.add_function(wrap_pyfunction!(md_regions, &internal)?)?;
     internal.add_function(wrap_pyfunction!(directive_scan, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(generic_fallback, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(export_markdown, &internal)?)?;
     internal.add_function(wrap_pyfunction!(attrs_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_eval, &internal)?)?;

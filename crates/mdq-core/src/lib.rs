@@ -8,6 +8,7 @@ pub mod decimal;
 pub mod diag;
 pub mod dim;
 pub mod entities;
+pub mod export;
 pub mod frontmatter;
 pub mod fx;
 pub mod headings;

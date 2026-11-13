@@ -183,6 +183,7 @@ fn rest_nonblank(c: &[char], a: usize, b: usize) -> bool {
 enum Mode {
     Details,
     Columns,
+    Generic,
 }
 
 struct Walker {
@@ -194,10 +195,15 @@ struct Walker {
 }
 
 impl Walker {
-    fn names(&self, n: &str) -> bool {
+    fn names(&self, k: &Container) -> bool {
+        let n = k.name.as_str();
         match self.mode {
             Mode::Details => n == "details",
             Mode::Columns => n == "columns" || n == "column",
+            Mode::Generic => {
+                !matches!(n, "details" | "columns" | "column" | "if" | "for")
+                    && k.attrs.iter().rev().find(|(a, _)| a == "optional").map(|x| x.1.as_str()) == Some("true")
+            }
         }
     }
 
@@ -208,7 +214,7 @@ impl Walker {
     }
 
     fn replacement(&self, k: &Container, eol: &str, scope_start: usize, scope_level: Option<usize>) -> Res<String> {
-        if self.mode == Mode::Columns {
+        if self.mode != Mode::Details {
             return self.emit(k.body_start, k.body_end, &k.children, scope_start, scope_level);
         }
         let base = self
@@ -237,7 +243,7 @@ impl Walker {
         let mut p = a;
         for k in kids {
             out.extend(self.c[p..k.start].iter());
-            if self.names(&k.name) {
+            if self.names(k) {
                 let eol = self.eol_of(k.start);
                 let repl = self.replacement(k, &eol, scope_start, scope_level)?;
                 if !repl.is_empty() && !out.is_empty() && !ends_blank(&out) {
@@ -284,6 +290,11 @@ pub fn details_fallback(text: &str, first_line: u32) -> Res<String> {
 /// `columns` and `column` containers are removed; their bodies stay in source order.
 pub fn columns_fallback(text: &str, first_line: u32) -> Res<String> {
     walk(text, first_line, Mode::Columns)
+}
+
+/// Containers with `optional="true"` that no other fallback handles are removed; their bodies stay.
+pub fn generic_fallback(text: &str, first_line: u32) -> Res<String> {
+    walk(text, first_line, Mode::Generic)
 }
 
 /// Replace every paragraph that is exactly `[[toc]]` at column 1 by a nested list of links to the

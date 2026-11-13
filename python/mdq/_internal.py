@@ -107,3 +107,5 @@ citation_resolve = _i.citation_resolve
 
 # E5.3 table of contents
 toc_build = _i.toc_build
+generic_fallback = _i.generic_fallback
+export_markdown = _i.export_markdown

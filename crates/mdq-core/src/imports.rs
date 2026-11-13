@@ -9,6 +9,7 @@
 use crate::blocks::{line_bounds, parse, Kind, Leaf};
 use crate::diag::{Code, Diagnostic};
 use crate::frontmatter;
+use crate::links::{apply_edits, leaf_edits};
 use crate::paths::path_normalise;
 use crate::refs::{resolve_in, Index};
 use crate::vars::html_inline_end;
@@ -25,11 +26,13 @@ pub struct Limits {
     pub max_depth: usize,
     pub max_expansions: usize,
     pub max_bytes: usize,
+    /// Rebase the links of embedded files to the root file's directory.
+    pub rebase_links: bool,
 }
 
 impl Default for Limits {
     fn default() -> Self {
-        Limits { max_depth: 64, max_expansions: 10_000, max_bytes: MAX_INPUT }
+        Limits { max_depth: 64, max_expansions: 10_000, max_bytes: MAX_INPUT, rebase_links: true }
     }
 }
 
@@ -53,6 +56,7 @@ struct Src {
     path: String,
     body: String,
     body_line: usize,
+    dir: Vec<String>,
     c: Vec<char>,
     starts: Vec<usize>,
     ends: Vec<usize>,
@@ -89,6 +93,7 @@ impl Src {
             path: path.to_string(),
             body,
             body_line: sp.body_line as usize,
+            dir: path.split('/').map(|x| x.to_string()).take(path.matches('/').count()).collect(),
             c,
             starts,
             ends,
@@ -224,6 +229,7 @@ struct Ctx<'a> {
     limits: Limits,
     expansions: usize,
     stack: Vec<(String, usize, usize)>,
+    root_dir: Vec<String>,
     out: String,
     out_lines: usize,
     map: Vec<Segment>,
@@ -262,7 +268,14 @@ impl<'a> Ctx<'a> {
         }
         let end = if y < src.n() { src.starts[y] } else { src.c.len() };
         if src.starts[x] < end {
-            self.out.extend(src.c[src.starts[x]..end].iter());
+            if self.limits.rebase_links && src.dir != self.root_dir {
+                let edits = leaf_edits(&src.c, &src.starts, &src.leaves, x, y, &src.dir, &self.root_dir, src.body_line as u32)
+                    .map_err(|d| with_path(d, &src.path))?;
+                let piece = apply_edits(&src.c, src.starts[x], end, &edits);
+                self.out.push_str(&piece);
+            } else {
+                self.out.extend(src.c[src.starts[x]..end].iter());
+            }
             self.check_size()?;
         }
         let phantom = (y == src.n() && src.ends[y - 1] == src.starts[y - 1]) as usize;
@@ -368,6 +381,7 @@ pub fn import_expand(
         limits,
         expansions: 0,
         stack: vec![(root.clone(), 0, rs.n())],
+        root_dir: rs.dir.clone(),
         out: String::new(),
         out_lines: 0,
         map: Vec::new(),

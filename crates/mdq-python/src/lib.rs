@@ -12,6 +12,7 @@ use mdq_core::frontmatter;
 use mdq_core::fx;
 use mdq_core::headings;
 use mdq_core::imports;
+use mdq_core::links;
 use mdq_core::refs;
 use mdq_core::meta;
 use mdq_core::paths;
@@ -638,7 +639,7 @@ fn resolve_ref<'py>(py: Python<'py>, text: &str, fragment: &str, first_line: u32
 }
 
 #[pyfunction]
-#[pyo3(signature = (text, path, read, max_depth=64, max_expansions=10000, max_bytes=16777216))]
+#[pyo3(signature = (text, path, read, max_depth=64, max_expansions=10000, max_bytes=16777216, rebase=true))]
 fn import_expand<'py>(
     py: Python<'py>,
     text: &str,
@@ -647,6 +648,7 @@ fn import_expand<'py>(
     max_depth: usize,
     max_expansions: usize,
     max_bytes: usize,
+    rebase: bool,
 ) -> PyResult<Bound<'py, PyDict>> {
     if !read.is_callable() {
         return Err(PyTypeError::new_err("read must be callable"));
@@ -669,7 +671,7 @@ fn import_expand<'py>(
             },
         }
     };
-    let limits = imports::Limits { max_depth, max_expansions, max_bytes };
+    let limits = imports::Limits { max_depth, max_expansions, max_bytes, rebase_links: rebase };
     let res = imports::import_expand(text, path, &mut reader, limits);
     if let Some(e) = failure.borrow_mut().take() {
         return Err(e);
@@ -688,6 +690,17 @@ fn import_expand<'py>(
     out.set_item("text", r.text)?;
     out.set_item("map", map)?;
     Ok(out)
+}
+
+#[pyfunction]
+fn rebase_link(py: Python<'_>, dest: &str, from_dir: &str, to_dir: &str) -> PyResult<String> {
+    wrap(py, links::rebase_link(dest, from_dir, to_dir))
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, from_dir, to_dir, first_line=1))]
+fn rebase_links(py: Python<'_>, text: &str, from_dir: &str, to_dir: &str, first_line: u32) -> PyResult<String> {
+    wrap(py, links::rebase_links(text, from_dir, to_dir, first_line))
 }
 
 fn attrs_dict<'py>(py: Python<'py>, attrs: Vec<(String, String)>) -> PyResult<Bound<'py, PyDict>> {
@@ -891,6 +904,8 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(doc_index, &internal)?)?;
     internal.add_function(wrap_pyfunction!(resolve_ref, &internal)?)?;
     internal.add_function(wrap_pyfunction!(import_expand, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(rebase_link, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(rebase_links, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_canonical, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_combine, &internal)?)?;
     m.add_submodule(&internal)?;

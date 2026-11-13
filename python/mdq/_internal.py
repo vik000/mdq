@@ -85,3 +85,7 @@ resolve_ref = _i.resolve_ref
 
 # E4.4 import expansion
 import_expand = _i.import_expand
+
+# E4.5 link rebasing
+rebase_link = _i.rebase_link
+rebase_links = _i.rebase_links

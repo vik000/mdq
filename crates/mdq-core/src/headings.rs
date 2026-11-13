@@ -30,7 +30,7 @@ fn in_ranges(tab: &[(u32, u32)], cp: u32) -> bool {
     .is_ok()
 }
 
-fn u_ws(c: char) -> bool {
+pub(crate) fn u_ws(c: char) -> bool {
     matches!(c, ' ' | '\t' | '\n' | '\u{c}' | '\r') || in_ranges(ZS, c as u32)
 }
 
@@ -38,7 +38,7 @@ fn u_punct(c: char) -> bool {
     c.is_ascii_punctuation() || (c as u32 > 127 && in_ranges(PUNCT, c as u32))
 }
 
-fn entity_at(c: &[char], i: usize, n: usize) -> Option<(String, usize)> {
+pub(crate) fn entity_at(c: &[char], i: usize, n: usize) -> Option<(String, usize)> {
     let mut j = i + 1;
     if j < n && c[j] == '#' {
         j += 1;
@@ -107,18 +107,34 @@ fn has_blank_line(t: &[char]) -> bool {
     false
 }
 
-/// End (exclusive) of an inline link tail `(dest "title")` starting at `c[i] == '('`.
+/// An inline link tail `(dest "title")`: `dest` is the destination's char range (inside any
+/// `<>`), `end` is exclusive.
+pub(crate) struct LinkParts {
+    pub dest: (usize, usize),
+    pub angle: bool,
+    pub end: usize,
+}
+
 fn link_tail(c: &[char], i: usize, n: usize) -> Option<usize> {
+    link_parts(c, i, n).map(|p| p.end)
+}
+
+/// Parse an inline link tail starting at `c[i] == '('`.
+pub(crate) fn link_parts(c: &[char], i: usize, n: usize) -> Option<LinkParts> {
     if i >= n || c[i] != '(' {
         return None;
     }
     let mut i = skip_ws_link(c, i + 1, n);
+    let mut dest = (0usize, 0usize);
+    let mut angle = false;
     if i < n && c[i] == '<' {
         let mut j = i + 1;
         while j < n && c[j] != '\n' && c[j] != '\r' && c[j] != '<' && c[j] != '>' {
             j += if c[j] == '\\' && j + 1 < n && c[j + 1].is_ascii_punctuation() { 2 } else { 1 };
         }
         if j < n && c[j] == '>' {
+            dest = (i + 1, j);
+            angle = true;
             i = j + 1;
         } else {
             return None;
@@ -150,6 +166,7 @@ fn link_tail(c: &[char], i: usize, n: usize) -> Option<usize> {
         if depth != 0 {
             return None;
         }
+        dest = (i, j);
         i = j;
     }
     let k = skip_ws_link(c, i, n);
@@ -182,7 +199,7 @@ fn link_tail(c: &[char], i: usize, n: usize) -> Option<usize> {
         i = k;
     }
     if i < n && c[i] == ')' {
-        Some(i + 1)
+        Some(LinkParts { dest, angle, end: i + 1 })
     } else {
         None
     }

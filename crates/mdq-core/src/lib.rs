@@ -12,6 +12,7 @@ pub mod frontmatter;
 pub mod fx;
 pub mod headings;
 pub mod imports;
+pub mod links;
 pub mod meta;
 pub mod paths;
 pub mod refs;

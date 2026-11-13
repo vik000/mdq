@@ -93,6 +93,15 @@ fn apply(stack: &[String], p: &str, what: &str) -> Res<Vec<String>> {
     Ok(out)
 }
 
+/// A root-relative directory as segments ("" = root).
+pub(crate) fn dir_segments(d: &str, what: &str) -> Res<Vec<String>> {
+    if d.is_empty() {
+        Ok(Vec::new())
+    } else {
+        apply(&[], d, what)
+    }
+}
+
 /// Resolve `rel` against `base` (root-relative directory, "" = root). The result is a
 /// root-relative path with `/` separators and no `.`/`..` segments.
 pub fn path_normalise(base: &str, rel: &str) -> Res<String> {

@@ -1,0 +1,1305 @@
+# MDQ rule ledger (TEST_PLAN 3.5, G56). One entry per normative MUST / MUST NOT of spec/ (and the age SHOULD).
+# Keys: spec (file + section), text (the requirement), tests (pytest node IDs without parameters),
+# fixtures (conformance/cases/*.json ids), or na (why the rule cannot apply to this library).
+# Checked by tests/conformance/test_rule_ledger.py; strings are quoted one-liners (the loader is strict).
+
+ENC-UTF8-REJECT-MALFORMED:
+  spec: "extended-markdown header"
+  text: "Encoding: UTF-8; input MUST reject malformed UTF-8."
+  tests:
+    - "tests/unit/test_e3_f31_utf8.py::test_malformed_is_rejected_with_offset"
+    - "tests/unit/test_e3_f31_utf8.py::test_random_bytes_match_python"
+
+CORE-NORMATIVE-TERMS:
+  spec: "extended-markdown §1"
+  text: "The terms MUST, MUST NOT, SHOULD and MAY are normative."
+  na: "statement about how the spec document is read, not a behaviour of the library"
+
+CORE-PLAIN-MD-VALID:
+  spec: "extended-markdown §1"
+  text: "A plain .md file without MDQ directives MUST remain valid input."
+  tests:
+    - "tests/unit/test_e8_f81a_compile.py::test_plain_markdown_passes_through"
+    - "tests/unit/test_e5_f54_export.py::test_plain_markdown_passes_through_byte_identical"
+    - "tests/unit/test_e3_f32_blocks.py::test_documents_without_directives_are_unchanged"
+  fixtures: ["a-core-plain-md-unchanged"]
+
+CORE-COMMONMARK-SEMANTICS:
+  spec: "extended-markdown §1"
+  text: "MDQ processors MUST preserve ordinary CommonMark semantics."
+  tests:
+    - "tests/unit/test_e3_f32_blocks.py::test_blocks_match_markdown_it"
+    - "tests/unit/test_e3_f32_blocks.py::test_curated_documents_match_markdown_it"
+    - "tests/unit/test_e4_f45_links.py::test_rebased_text_renders_the_same_links"
+  fixtures: ["a-core-plain-md-unchanged", "a-core-gfm-constructs-kept"]
+
+CORE-BUILD-NO-UNRESOLVED-DIRECTIVES:
+  spec: "extended-markdown §1"
+  text: "mdq build MUST produce standard Markdown without unresolved MDQ directives."
+  tests:
+    - "tests/unit/test_e5_f54_export.py::test_unevaluated_variable_fails"
+    - "tests/unit/test_e5_f54_export.py::test_unexpanded_embed_fails"
+    - "tests/unit/test_e8_f81a_compile.py::test_block_ids_are_removed"
+  fixtures: ["a-core-build-strips-block-ids", "a-core-build-wiki-link-not-left-literal"]
+
+CORE-PUBLISH-PROFILES:
+  spec: "extended-markdown §1"
+  text: "A conforming implementation MUST publish supported feature profiles."
+  tests:
+    - "tests/unit/test_e0_f01_versions.py::TestGeneral::test_supported_profiles_are_known_and_unique"
+    - "tests/unit/test_e8_f81a_compile.py::test_all_profiles_supported"
+  fixtures: ["a-core-all-profiles-accepted"]
+
+CORE-UNSUPPORTED-FEATURE-FAILS:
+  spec: "extended-markdown §1"
+  text: "Unsupported required features MUST fail rather than silently disappear."
+  tests:
+    - "tests/unit/test_e0_f01_versions.py::TestNegative::test_unknown_profile_names_the_profile"
+    - "tests/unit/test_e8_f81a_compile.py::test_version_and_features"
+    - "tests/unit/test_e5_f54_export.py::test_unknown_required_containers_fail"
+  fixtures: ["a-core-unknown-feature-fails", "a-core-unknown-required-container-fails"]
+
+RICH-PORTABLE-EXPORT-SPECIFIED:
+  spec: "extended-markdown §1"
+  text: "Rich features ... may require a rendering adapter; their portable export MUST be specified."
+  na: "obligation on the specification text (it must define the fallbacks), not on the library; the fallbacks themselves are covered by the RICH-* rules"
+
+LEX-NO-DIRECTIVE-IN-FENCED-CODE:
+  spec: "extended-markdown §2"
+  text: "MDQ directives MUST NOT be interpreted inside fenced code."
+  tests:
+    - "tests/unit/test_e3_f32_blocks.py::test_scan_ignores_code_html_and_escapes_at_any_depth"
+    - "tests/unit/test_e4_f44_imports.py::test_not_an_embed_stays_literal_and_is_never_read"
+  fixtures: ["a-lex-fenced-code-literal"]
+
+LEX-NO-DIRECTIVE-IN-INDENTED-CODE:
+  spec: "extended-markdown §2"
+  text: "MDQ directives MUST NOT be interpreted inside indented code."
+  tests:
+    - "tests/unit/test_e3_f32_blocks.py::test_scan_ignores_code_html_and_escapes_at_any_depth"
+    - "tests/unit/test_e4_f44_imports.py::test_not_an_embed_stays_literal_and_is_never_read"
+  fixtures: ["a-lex-indented-code-literal"]
+
+LEX-NO-DIRECTIVE-IN-INLINE-CODE:
+  spec: "extended-markdown §2"
+  text: "MDQ directives MUST NOT be interpreted inside inline code."
+  tests:
+    - "tests/unit/test_e3_f32_blocks.py::test_scan_ignores_code_html_and_escapes_at_any_depth"
+    - "tests/unit/test_e2_f24_vars.py::test_code_and_html_stay_literal"
+  fixtures: ["a-lex-inline-code-literal"]
+
+LEX-NO-DIRECTIVE-IN-HTML-BLOCK:
+  spec: "extended-markdown §2"
+  text: "MDQ directives MUST NOT be interpreted inside raw HTML blocks."
+  tests:
+    - "tests/unit/test_e3_f32_blocks.py::test_scan_ignores_code_html_and_escapes_at_any_depth"
+    - "tests/unit/test_e3_f32_blocks.py::test_nested_code_and_html_stay_literal"
+  fixtures: ["a-lex-html-block-literal"]
+
+LEX-NO-DIRECTIVE-ESCAPED:
+  spec: "extended-markdown §2"
+  text: "MDQ directives MUST NOT be interpreted inside escaped sequences (a backslash before an opening delimiter escapes it)."
+  tests:
+    - "tests/unit/test_e2_f24_vars.py::test_backslash_escapes"
+    - "tests/unit/test_e4_f44_imports.py::test_not_an_embed_stays_literal_and_is_never_read"
+  fixtures: ["a-lex-escaped-directive-literal"]
+
+LEX-PARSE-BEFORE-EXPAND:
+  spec: "extended-markdown §2"
+  text: "Implementations MUST parse Markdown structure before expanding inline directives; global regular-expression replacement is not conforming."
+  tests:
+    - "tests/unit/test_e3_f32_blocks.py::test_directive_split_across_a_code_span_is_not_a_directive"
+    - "tests/unit/test_e3_f32_blocks.py::test_scan_ignores_code_html_and_escapes_at_any_depth"
+  fixtures: ["a-lex-code-span-structure-first"]
+
+LEX-PATH-NO-ROOT-ESCAPE:
+  spec: "extended-markdown §2"
+  text: "A path MUST NOT escape the authorised root after canonicalisation."
+  tests:
+    - "tests/unit/test_e4_f41_paths.py::test_traversal_is_denied"
+    - "tests/unit/test_e4_f41_paths.py::test_absolute_and_scheme_are_denied"
+  fixtures: ["a-lex-path-traversal-denied"]
+
+LEX-PATH-NO-SYMLINK-ESCAPE:
+  spec: "extended-markdown §2"
+  text: "A path MUST NOT escape the authorised root ... including through symlinks."
+  tests:
+    - "tests/unit/test_e4_f41_paths.py::test_symlink_escape_is_denied"
+    - "tests/unit/test_e4_f41_paths.py::test_broken_and_looping_symlinks"
+
+COMP-BLOCK-ID-SYNTAX:
+  spec: "extended-markdown §3"
+  text: "IDs match [A-Za-z][A-Za-z0-9_-]*."
+  tests:
+    - "tests/unit/test_e4_f43_refs.py::test_markers"
+    - "tests/unit/test_e4_f43_refs.py::test_resolve_invalid_block_id"
+
+COMP-BLOCK-ID-UNIQUE:
+  spec: "extended-markdown §3"
+  text: "Block IDs MUST be unique per source document."
+  tests:
+    - "tests/unit/test_e4_f43_refs.py::test_duplicate_ids_error_at_second_marker"
+    - "tests/unit/test_e4_f44_imports.py::test_duplicate_id_in_target_found_when_indexing_it"
+  fixtures: ["a-comp-block-id-duplicate-target", "a-comp-block-id-duplicate-root"]
+
+COMP-REF-EXPLICIT-RELATIVE-PATH:
+  spec: "extended-markdown §3"
+  text: "References MUST resolve to explicit relative paths; filename-only global searches are not performed."
+  tests:
+    - "tests/unit/test_e4_f44_imports.py::test_relative_to_importing_file_and_nested"
+    - "tests/unit/test_e4_f44_imports.py::test_case_sensitive_paths"
+  fixtures: ["a-comp-ref-no-global-filename-search"]
+
+COMP-IMPORT-CYCLE:
+  spec: "extended-markdown §3"
+  text: "Implementations MUST detect import cycles."
+  tests:
+    - "tests/unit/test_e4_f44_imports.py::test_cycle_self"
+    - "tests/unit/test_e4_f44_imports.py::test_cycle_two_files"
+    - "tests/unit/test_e4_f44_imports.py::test_cycle_three_files"
+  fixtures: ["a-comp-import-cycle-two-files"]
+
+COMP-IMPORT-CYCLE-SECTION:
+  spec: "extended-markdown §3"
+  text: "Import cycle detection MUST include section imports."
+  tests:
+    - "tests/unit/test_e4_f44_imports.py::test_section_that_contains_its_own_import_is_a_cycle"
+    - "tests/unit/test_e4_f44_imports.py::test_whole_file_importing_its_section_that_imports_the_file_is_a_cycle"
+  fixtures: ["a-comp-import-cycle-section"]
+
+COMP-REF-LINK-REWRITE:
+  spec: "extended-markdown §3"
+  text: "A link generated by a reference MUST be rewritten to point to the compiled target when available."
+  fixtures: ["a-core-build-wiki-link-not-left-literal"]
+
+COMP-REF-LINK-FALLBACK-OR-FAIL:
+  spec: "extended-markdown §3"
+  text: "Otherwise it MUST remain a valid relative Markdown link to a copied dependency or fail with MDQ_UNRESOLVED_REFERENCE."
+  fixtures: ["a-comp-ref-link-unresolved-heading-fails"]
+
+ANCH-COMBINED-DUPLICATE-DISAMBIGUATE:
+  spec: "extended-markdown §3"
+  text: "Duplicate heading anchors in a combined output MUST be disambiguated deterministically using §3.1."
+  tests:
+    - "tests/unit/test_e5_f53_toc.py::test_toc_includes_imported_headings"
+    - "tests/unit/test_e5_f54_export.py::test_toc_sees_the_headings_made_by_fallbacks_and_keeps_anchors_unique"
+  fixtures: ["a-anch-combined-duplicate-headings"]
+
+ANCH-BLOCK-ID-PRIORITY:
+  spec: "extended-markdown §3.1"
+  text: "A user-authored block ID has priority as its own anchor and MUST NOT collide with another generated ID."
+  fixtures: ["a-anch-block-id-reserves-its-anchor"]
+
+ANCH-GENERATED-COLLISION-RENAME:
+  spec: "extended-markdown §3.1"
+  text: "Generated anchor collisions MUST be deterministically renamed."
+  tests:
+    - "tests/unit/test_e4_f42_headings.py::test_dedupe"
+    - "tests/unit/test_e4_f42_headings.py::test_dedupe_properties"
+  fixtures: ["a-anch-combined-duplicate-headings"]
+
+ANCH-PORTABLE-SLUG-ALGORITHM:
+  spec: "extended-markdown §3.1"
+  text: "Exporters MAY use a renderer-specific algorithm only in a declared non-portable profile; the portable profile MUST use this algorithm."
+  tests:
+    - "tests/unit/test_e4_f42_headings.py::test_slugify_matches_independent_implementation"
+    - "tests/unit/test_e4_f42_headings.py::test_slugify"
+    - "tests/unit/test_e4_f42_headings.py::test_percent_encode"
+  fixtures: ["a-anch-portable-slug"]
+
+ANCH-ABSENT-TARGET-NO-BROKEN-ANCHOR:
+  spec: "extended-markdown §3.1"
+  text: "If a source target is absent from the output, the exporter MUST emit a working link to a separately exported file or fail with MDQ_UNRESOLVED_REFERENCE; it MUST NOT generate a broken anchor."
+  fixtures: ["a-comp-ref-link-unresolved-heading-fails"]
+
+ANCH-EXPORT-REWRITE-DESTINATIONS:
+  spec: "extended-markdown §3.1"
+  text: "When exporting to a different directory or a single-file format, the exporter MUST rewrite destinations or copy/inline assets to keep links valid."
+  tests:
+    - "tests/unit/test_e4_f45_links.py::test_spec_example_chapters_intro_into_index"
+    - "tests/unit/test_e4_f45_links.py::test_imported_links_are_relative_to_the_root_files_directory"
+    - "tests/unit/test_e4_f45_links.py::test_nested_imports_rebase_from_their_own_directory"
+  fixtures: ["a-anch-import-asset-rebased"]
+
+ANCH-HTML-EXPORT-LINKS:
+  spec: "extended-markdown §3.1"
+  text: "For HTML export, Markdown links MUST point to generated HTML paths and HTML anchors, not raw .md targets."
+  na: "the library has no HTML exporter (Markdown export only)"
+
+CORE-NORMATIVE-SCOPE:
+  spec: "extended-markdown §3.2"
+  text: "Sections explicitly marked normative, and all unqualified MUST/MUST NOT/SHOULD/MAY requirements, define conformance."
+  na: "statement about the spec document itself"
+
+CORE-EXAMPLE-CORRECTION:
+  spec: "extended-markdown §3.2"
+  text: "Where an example conflicts with a normative rule, the normative rule prevails and the example MUST be corrected."
+  na: "obligation on the spec editors, not the library"
+
+VAR-NO-COLLECTION-INTERPOLATION:
+  spec: "extended-markdown §4"
+  text: "Objects and arrays MUST NOT interpolate without an explicit renderer."
+  tests:
+    - "tests/unit/test_e2_f24_vars.py::test_collections_cannot_interpolate"
+    - "tests/unit/test_e2_f24_vars.py::test_collections_are_rejected"
+  fixtures: ["a-var-mapping-not-interpolated", "a-var-list-not-interpolated"]
+
+VAR-ESCAPE-METACHARACTERS:
+  spec: "extended-markdown §4"
+  text: "Expansion in inline Markdown text MUST escape Markdown metacharacters by default."
+  tests:
+    - "tests/unit/test_e2_f24_vars.py::test_values_are_escaped"
+    - "tests/unit/test_e2_f24_vars.py::test_escape_renders_literally"
+    - "tests/unit/test_e2_f24_vars.py::test_interpolated_value_renders_literally"
+  fixtures: ["a-var-metacharacters-escaped"]
+
+VAR-NO-RAW-INSERTION:
+  spec: "extended-markdown §4"
+  text: "Trusted raw insertion requires a separate opt-in capability, not supported by core 0.1."
+  tests:
+    - "tests/unit/test_e2_f24_vars.py::test_no_second_expansion"
+  fixtures: ["a-var-directive-in-value-not-expanded", "a-var-metacharacters-escaped"]
+
+META-FRONTMATTER-MAPPING:
+  spec: "extended-markdown §5"
+  text: "YAML frontmatter enclosed by --- lines MUST be a mapping."
+  tests:
+    - "tests/unit/test_e2_f22_yaml.py::test_root_must_be_a_mapping"
+  fixtures: ["a-meta-frontmatter-sequence-rejected", "a-meta-frontmatter-scalar-rejected"]
+
+META-DUPLICATE-KEYS:
+  spec: "extended-markdown §5"
+  text: "Duplicate YAML mapping keys MUST fail."
+  tests:
+    - "tests/unit/test_e2_f22_yaml.py::test_duplicate_keys"
+    - "tests/unit/test_e2_f22_yaml.py::test_a_duplicate_key_is_always_an_error"
+  fixtures: ["a-meta-duplicate-key-frontmatter", "a-meta-duplicate-key-sidecar", "a-meta-duplicate-key-directory"]
+
+META-RESERVED-NAMESPACE-CONFLICT:
+  spec: "extended-markdown §5"
+  text: "Conflicting reserved namespaces MUST fail."
+  tests:
+    - "tests/unit/test_e8_f81a_compile.py::test_reserved_namespaces"
+  fixtures: ["a-meta-reserved-namespace-document", "a-meta-reserved-namespace-calc"]
+
+COND-NESTED-LONGER-DELIMITER:
+  spec: "extended-markdown §6"
+  text: "Nested containers MUST use a longer delimiter than their parent."
+  tests:
+    - "tests/unit/test_e3_f33_containers.py::test_container_errors"
+    - "tests/unit/test_e3_f33_containers.py::test_three_levels"
+  fixtures: ["a-cond-nested-same-delimiter-rejected", "a-cond-nested-shorter-delimiter-rejected", "a-cond-nested-longer-delimiter-ok"]
+
+COND-EXCLUDED-NO-IMPORT-READ:
+  spec: "extended-markdown §6"
+  text: "Conditions are evaluated before transclusion of their bodies, so excluded branches MUST NOT read imports."
+  tests:
+    - "tests/unit/test_e8_f81a_compile.py::test_excluded_branch_never_reads_the_import"
+    - "tests/unit/test_e4_f44_imports.py::test_excluded_if_branch_never_reads"
+    - "tests/unit/test_e3_f34_eval.py::test_excluded_branches_are_never_evaluated"
+  fixtures: ["a-cond-excluded-branch-missing-import", "a-cond-excluded-branch-bad-section", "a-cond-included-branch-reads-import"]
+
+COND-EXCLUDED-NO-DECRYPT:
+  spec: "extended-markdown §6"
+  text: "Excluded branches MUST NOT decrypt resources."
+  na: "core 0.1 has no per-resource decryption reachable from a branch: age decryption is whole-package at PackageFS open (G49) and the per-member layout is an open spec gap (Epic 7)"
+
+RICH-FOOTNOTE-SCOPED-RENAME:
+  spec: "extended-markdown §7"
+  text: "Footnote identifiers MUST be scoped and renamed deterministically on transclusion."
+  tests:
+    - "tests/unit/test_e5_f52_math_footnotes.py::test_embedded_files_get_their_own_footnote_scope"
+    - "tests/unit/test_e5_f52_math_footnotes.py::test_same_file_embedded_twice_gets_distinct_scopes"
+    - "tests/unit/test_e5_f52_math_footnotes.py::test_scope_encoding_is_injective_for_similar_paths"
+  fixtures: ["a-rich-footnotes-scoped-on-import"]
+
+RICH-MATH-NO-EXECUTE:
+  spec: "extended-markdown §7"
+  text: "Processors MUST NOT execute LaTeX commands or shell escapes."
+  tests:
+    - "tests/unit/test_e5_f52_math_footnotes.py::test_inline_maths_renders_as_code_with_the_exact_body"
+  fixtures: ["a-rich-math-not-executed", "a-rich-math-gfm-keeps-notation"]
+
+RICH-MATH-COMMONMARK-FALLBACK:
+  spec: "extended-markdown §7"
+  text: "Strict CommonMark export MUST use a code/text fallback for maths."
+  tests:
+    - "tests/unit/test_e5_f52_math_footnotes.py::test_inline_maths_renders_as_code_with_the_exact_body"
+    - "tests/unit/test_e5_f52_math_footnotes.py::test_display_maths_renders_as_a_math_code_block"
+    - "tests/unit/test_e5_f54_export.py::test_gfm_profile_keeps_maths"
+  fixtures: ["a-rich-math-not-executed"]
+
+RICH-MERMAID-UNTRUSTED:
+  spec: "extended-markdown §7"
+  text: "A renderer MAY generate a diagram, but MUST treat source as untrusted."
+  na: "the library has no diagram renderer; Markdown export keeps the mermaid fence verbatim (tests/unit/test_e5_f54_export.py::test_mermaid_tables_tasks_strikethrough_footnotes_are_kept)"
+
+RICH-CITATION-PORTABLE-FALLBACK:
+  spec: "extended-markdown §7"
+  text: "Portable fallback MUST preserve a readable citation label and bibliography."
+  tests:
+    - "tests/unit/test_e5_f52b_citations.py::test_rendered_output_has_text_citations_and_a_list"
+    - "tests/unit/test_e5_f52b_citations.py::test_bibliography_appended_with_heading_and_sorted"
+    - "tests/unit/test_e8_f81b_data.py::test_bibtex_and_csl_bibliographies"
+  fixtures: ["a-rich-citation-portable-fallback"]
+
+CALC-NO-CODE-EVAL:
+  spec: "extended-markdown §8"
+  text: "the calc parser MUST NOT evaluate Python, Rust, JavaScript or arbitrary user code"
+  tests:
+    - "tests/unit/test_e1_f11_lexer.py::test_lexer_errors_have_code_line_and_column"
+    - "tests/unit/test_e1_f12_parser.py::test_syntax_errors"
+  fixtures: ["b-calc-vec-10", "b-calc-no-python-import", "b-calc-no-function-call"]
+
+CALC-NO-EXTRA-CONSTRUCTS:
+  spec: "extended-markdown §8, §8.5"
+  text: "an implementation MUST NOT expose expression constructs beyond the core calc grammar (no exponentiation, comparisons, booleans, conditions, indexing, inline comments, scientific notation, chained conversions)"
+  tests:
+    - "tests/unit/test_e1_f12_parser.py::test_syntax_errors"
+    - "tests/unit/test_e1_f11_lexer.py::test_lexer_errors_have_code_line_and_column"
+  fixtures: ["b-calc-no-power-operator", "b-calc-no-comparison", "b-calc-no-indexing", "b-calc-no-conditional", "b-calc-no-boolean-literal", "b-calc-no-inline-comment", "b-calc-no-scientific-notation", "b-calc-no-chained-conversion", "b-calc-no-fx-function"]
+
+CALC-UNIQUE-ASSIGNMENT:
+  spec: "extended-markdown §8.1, §8.6"
+  text: "assignment names MUST be unique within a calc block (duplicate is MDQ_CALC_ERROR; names are case-sensitive)"
+  tests:
+    - "tests/unit/test_e1_f12_parser.py::test_duplicate_reports_line_and_first_line"
+    - "tests/unit/test_e1_f12_parser.py::test_duplicate_detection_ignores_blank_lines_and_respects_case"
+  fixtures: ["b-calc-duplicate-assignment", "b-calc-same-name-different-case"]
+
+CALC-PRECISION-28:
+  spec: "extended-markdown §8.1, §8.7"
+  text: "decimal arithmetic MUST use at least 28 significant digits with ROUND_HALF_EVEN when precision is exhausted"
+  tests:
+    - "tests/unit/test_e1_f13_decimal.py::TestRounding::test_tie_at_digit_28_goes_to_even"
+    - "tests/unit/test_e8_f82_api_quality.py::test_28_significant_digits_half_even"
+    - "tests/unit/test_e1_f15_eval.py::test_each_step_rounds_once_to_28_digits"
+  fixtures: ["b-calc-28-digits-half-even", "b-calc-28-digits-kept"]
+
+CALC-DIV-ZERO:
+  spec: "extended-markdown §8.1, §8.7"
+  text: "division by zero is an error (MDQ_CALC_ERROR), for numbers, quantities and money"
+  tests:
+    - "tests/unit/test_e1_f13_decimal.py::TestErrors::test_division_by_zero"
+    - "tests/unit/test_e1_f15_eval.py::test_evaluation_errors"
+  fixtures: ["b-calc-vec-07", "b-calc-div-zero-quantity"]
+
+CALC-EXPORT-COLLISION:
+  spec: "extended-markdown §8.1, §8.6"
+  text: "two calc blocks in the same output MUST NOT export the same calc.name without a disambiguating namespace; the default is MDQ_CALC_ERROR"
+  tests:
+    - "tests/unit/test_e8_f81a_compile.py::test_duplicate_export_across_blocks"
+    - "tests/unit/test_e8_f81a_compile.py::test_calc_inside_a_loop_exports_twice"
+  fixtures: ["b-calc-export-collision", "b-calc-distinct-exports"]
+
+UNIT-UNKNOWN-REJECT:
+  spec: "extended-markdown §8.2"
+  text: "libraries MUST reject unknown units (source and conversion target)"
+  tests:
+    - "tests/unit/test_e1_f14_units.py::TestLookup::test_unknown_or_miscased_symbols_rejected"
+    - "tests/unit/test_e1_f14_units.py::TestConvertNegative::test_unknown_unit_either_side"
+  fixtures: ["b-unit-unknown", "b-unit-unknown-target"]
+
+UNIT-INCOMPATIBLE-REJECT:
+  spec: "extended-markdown §8.2"
+  text: "libraries MUST reject incompatible dimensions"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_evaluation_errors"
+    - "tests/unit/test_e1_f14_units.py::TestConvertNegative::test_incompatible_or_unknown"
+  fixtures: ["b-calc-vec-08", "b-unit-incompatible-conversion"]
+
+UNIT-TEMP-ILLEGAL-REJECT:
+  spec: "extended-markdown §8.2"
+  text: "libraries MUST reject illegal operations on absolute affine temperatures"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_temperature_misuse"
+  fixtures: ["b-unit-temp-multiply", "b-unit-temp-add"]
+
+UNIT-BARE-C-F:
+  spec: "extended-markdown §8.2"
+  text: "bare C and F MUST NOT mean temperature (they are unknown units); degC and degF are the temperature tokens"
+  tests:
+    - "tests/unit/test_e1_f14_units.py::TestLookup::test_unknown_or_miscased_symbols_rejected"
+    - "tests/unit/test_e1_f11_lexer.py::test_lexer_errors_have_code_line_and_column"
+  fixtures: ["b-unit-bare-c", "b-unit-bare-f", "b-unit-to-bare-c", "b-unit-degc-degf"]
+
+UNIT-CATALOGUE-VERSION:
+  spec: "extended-markdown §8.2"
+  text: "implementations MUST expose the unit catalogue version used"
+  tests:
+    - "tests/unit/test_e1_f14_units.py::TestCatalogueData::test_catalogue_version_exposed"
+    - "tests/unit/test_e0_f01_versions.py::TestGeneral::test_version_info_values"
+
+FX-NO-FETCH:
+  spec: "extended-markdown §8.3, §8.8"
+  text: "the library MUST NOT fetch exchange rates or retrieve currency observations itself; an unavailable rate is MDQ_SOURCE_UNRESOLVED"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_conversion_to_another_currency_needs_an_observation"
+    - "tests/unit/test_e8_f81b_data.py::test_currency_conversion_with_observations"
+    - "tests/unit/test_e8_f83_cli.py::test_cli_never_opens_a_socket"
+  fixtures: ["b-fx-no-observation", "b-fx-host-money-no-observation"]
+
+FX-HOST-SUPPLIES-OBSERVATIONS:
+  spec: "extended-markdown §8.3"
+  text: "the reader/host MUST supply provenance and any conversion observations as resolved input (observations carry a provider; malformed host data is MDQ_SOURCE_INVALID)"
+  tests:
+    - "tests/unit/test_e1_f16_fx.py::test_invalid_observation_records"
+    - "tests/unit/test_e8_f81b_data.py::test_currency_conversion_with_observations"
+    - "tests/unit/test_e1_f16_fx.py::test_provenance_is_reported_per_line"
+  fixtures: ["b-fx-host-money-no-observation", "b-fx-same-currency-needs-no-observation"]
+
+DET-CALC-EVAL:
+  spec: "extended-markdown §8.4"
+  text: "core evaluation MUST be deterministic for identical typed inputs, unit catalogue and configuration"
+  tests:
+    - "tests/unit/test_e8_f81a_compile.py::test_results_are_frozen_and_deterministic"
+    - "tests/unit/test_e1_f16_fx.py::test_shuffling_the_observations_never_changes_the_selection"
+    - "tests/unit/test_e8_f82_api_quality.py::test_eight_threads_give_identical_results"
+
+CALC-NO-FILE-READ:
+  spec: "extended-markdown §8.4"
+  text: "calc blocks MUST NOT read files (no strings, no function calls; names resolve only to assignments and variables)"
+  tests:
+    - "tests/unit/test_e1_f11_lexer.py::test_lexer_errors_have_code_line_and_column"
+    - "tests/unit/test_e1_f15_eval.py::test_evaluation_errors"
+  fixtures: ["b-calc-no-file-read", "b-calc-no-file-name"]
+
+CALC-NO-CLOCK:
+  spec: "extended-markdown §8.4"
+  text: "calc blocks MUST NOT access the clock"
+  tests:
+    - "tests/unit/test_e1_f16_fx.py::test_no_request_means_unresolved"
+  fixtures: ["b-calc-no-clock", "b-calc-no-clock-call"]
+
+CALC-NO-NETWORK:
+  spec: "extended-markdown §8.3, §8.4"
+  text: "calc blocks MUST NOT make network calls"
+  tests:
+    - "tests/unit/test_e8_f83_cli.py::test_cli_never_opens_a_socket"
+    - "tests/unit/test_e8_f81b_data.py::test_compile_never_fetches"
+  fixtures: ["b-calc-no-network-call", "b-calc-no-fx-function"]
+
+CALC-SAME-MD-AND-MDQ:
+  spec: "extended-markdown §8.4"
+  text: "the calc grammar and unit catalogue are identical in .md and .mdq"
+  tests:
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_package_calc_and_inputs"
+
+UNIT-EXT-NO-ALTER:
+  spec: "extended-markdown §8.4"
+  text: "trusted extensions MUST NOT silently alter existing unit definitions"
+  fixtures: ["b-unit-metadata-cannot-redefine"]
+
+CALC-EXT-NO-CODE:
+  spec: "extended-markdown §8.4"
+  text: "trusted extensions MUST NOT introduce arbitrary code execution"
+  na: "the library has no extension mechanism at all (the unit catalogue is compiled in; package manifest keys outside its schema are plain metadata), so there is nothing that could add code"
+
+CALC-EMPTY-BLOCK:
+  spec: "extended-markdown §8.5"
+  text: "a calc block has zero or more assignments; an empty (or comment-only) block is valid"
+  tests:
+    - "tests/unit/test_e1_f12_parser.py::test_empty_blocks_are_valid"
+    - "tests/unit/test_e1_f15_eval.py::test_empty_block_has_no_results"
+  fixtures: ["b-calc-empty-block", "b-calc-comment-only-block"]
+
+CALC-HOST-TYPED-INPUTS:
+  spec: "extended-markdown §8.6"
+  text: "a host MUST provide required values as named typed inputs before evaluation; a missing name is an error"
+  tests:
+    - "tests/unit/test_e8_f81a_compile.py::test_calc_inputs_from_the_host"
+    - "tests/unit/test_e1_f15_eval.py::test_host_variables_are_typed_inputs"
+    - "tests/unit/test_e8_f81b_data.py::test_missing_host_value"
+  fixtures: ["b-calc-host-input", "b-calc-host-input-quantity", "b-calc-missing-host-input"]
+
+CALC-PRESERVE-TYPE-UNIT:
+  spec: "extended-markdown §8.6"
+  text: "the engine MUST preserve a result's type and unit; display formatting is separate"
+  tests:
+    - "tests/unit/test_e1_f17_render.py::test_typed_fields_are_preserved_next_to_the_display"
+    - "tests/unit/test_e1_f15_eval.py::test_result_fields_and_positions"
+    - "tests/unit/test_e1_f15_eval.py::test_spec_example_block"
+  fixtures: ["b-calc-type-and-unit-kept"]
+
+CALC-UNRESOLVED-FAILS:
+  spec: "extended-markdown §8.6"
+  text: "a result with an unresolved source MUST fail, not render an empty value"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_conversion_to_another_currency_needs_an_observation"
+    - "tests/unit/test_e8_f81b_data.py::test_compile_never_fetches"
+    - "tests/unit/test_e8_f81a_compile.py::test_undefined_calc_reference_is_located"
+  fixtures: ["b-fx-no-observation", "b-calc-unresolved-declared-input", "b-calc-undefined-result"]
+
+CALC-TO-SAME-DIM:
+  spec: "extended-markdown §8.7"
+  text: "conversion `to` requires a catalogue target of the same resulting dimension and MUST reject conversion to an unrelated dimension"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_unsupported_unit_combinations"
+    - "tests/unit/test_e1_f15_eval.py::test_conversion_to_a_same_dimension_unit_matches_the_oracle"
+  fixtures: ["b-calc-to-unrelated-dimension", "b-unit-incompatible-conversion", "b-calc-to-same-dimension"]
+
+CALC-PRECISION-EXPOSED:
+  spec: "extended-markdown §8.7"
+  text: "implementations MUST expose the configured precision"
+  tests:
+    - "tests/unit/test_e1_f13_decimal.py::TestGeneral::test_precision_is_28"
+
+CALC-PRECISION-IN-FIXTURES:
+  spec: "extended-markdown §8.7"
+  text: "fixed-input conformance fixtures MUST specify the precision"
+  tests:
+    - "tests/unit/test_e1_f13_decimal.py::TestGeneral::test_precision_is_28"
+
+UNIT-TEMP-NO-MULDIV:
+  spec: "extended-markdown §8.7"
+  text: "absolute temperatures (degC, degF, K) MUST NOT be multiplied or divided"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_temperature_misuse"
+  fixtures: ["b-unit-temp-multiply", "b-unit-temp-divide", "b-unit-temp-kelvin-scaled"]
+
+UNIT-TEMP-NO-ADD:
+  spec: "extended-markdown §8.7"
+  text: "absolute temperatures MUST NOT be added together"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_temperature_misuse"
+  fixtures: ["b-unit-temp-add", "b-unit-temp-add-kelvin"]
+
+UNIT-TEMP-NO-COMPOUND:
+  spec: "extended-markdown §8.7"
+  text: "absolute temperatures MUST NOT be used as a factor in a compound unit"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_temperature_misuse"
+  fixtures: ["b-unit-temp-compound-factor", "b-unit-temp-compound-ratio"]
+
+UNIT-TEMP-DIFF-DELTAK:
+  spec: "extended-markdown §8.7"
+  text: "subtracting two absolute temperatures produces a temperature difference in kelvin increments, displayed as deltaK"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_temperatures"
+  fixtures: ["b-unit-temp-difference-deltak"]
+
+UNIT-TEMP-DELTA-ABS-FAILS:
+  spec: "extended-markdown §8.7"
+  text: "adding or subtracting a temperature difference to/from an absolute temperature MUST fail in 0.1"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_temperature_misuse"
+  fixtures: ["b-unit-temp-abs-plus-delta", "b-unit-temp-abs-minus-delta", "b-unit-temp-delta-plus-abs"]
+
+FX-VALUATION-OR-ID:
+  spec: "extended-markdown §8.8"
+  text: "the trusted invocation MUST specify a valuation timestamp or an explicit observation id for each currency conversion; without one the conversion is MDQ_SOURCE_UNRESOLVED"
+  tests:
+    - "tests/unit/test_e1_f16_fx.py::test_no_request_means_unresolved"
+    - "tests/unit/test_e1_f16_fx.py::test_explicit_observation_id"
+    - "tests/unit/test_e1_f16_fx.py::test_pins_alone_are_a_request_for_that_pair"
+  fixtures: ["b-fx-no-observation"]
+
+FX-TIE-NEEDS-ID:
+  spec: "extended-markdown §8.8"
+  text: "when several eligible observations share the latest timestamp the host MUST specify an observation id (otherwise MDQ_SOURCE_UNRESOLVED)"
+  tests:
+    - "tests/unit/test_e1_f16_fx.py::test_equal_timestamps_are_ambiguous_without_an_id"
+    - "tests/unit/test_e1_f16_fx.py::test_ambiguity_is_reported_at_the_conversion"
+    - "tests/unit/test_e1_f16_fx.py::test_ties_across_different_offsets_are_still_ties"
+
+FX-NO-ARBITRARY-CHOICE:
+  spec: "extended-markdown §8.8"
+  text: "the engine MUST NOT choose arbitrarily between tied observations; selection does not depend on input order"
+  tests:
+    - "tests/unit/test_e1_f16_fx.py::test_a_tie_only_matters_at_the_latest_eligible_timestamp"
+    - "tests/unit/test_e1_f16_fx.py::test_shuffling_the_observations_never_changes_the_selection"
+    - "tests/unit/test_e1_f16_fx.py::test_equal_timestamps_are_ambiguous_without_an_id"
+
+CALC-VEC-01:
+  spec: "extended-markdown §8.9"
+  text: "test vector at 28-digit precision: x = 10 -> 10"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_spec_vectors"
+  fixtures: ["b-calc-vec-01"]
+
+CALC-VEC-02:
+  spec: "extended-markdown §8.9"
+  text: "test vector at 28-digit precision: x = 2 + 3 * 4 -> 14"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_spec_vectors"
+  fixtures: ["b-calc-vec-02"]
+
+CALC-VEC-03:
+  spec: "extended-markdown §8.9"
+  text: "test vector at 28-digit precision: x = (2 + 3) * 4 -> 20"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_spec_vectors"
+  fixtures: ["b-calc-vec-03"]
+
+CALC-VEC-04:
+  spec: "extended-markdown §8.9"
+  text: "test vector at 28-digit precision: x = 120 * 21% -> 25.2"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_spec_vectors"
+  fixtures: ["b-calc-vec-04"]
+
+CALC-VEC-05:
+  spec: "extended-markdown §8.9"
+  text: "test vector at 28-digit precision: x = 12 miles to km -> 19.312128 km"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_spec_vectors"
+    - "tests/unit/test_e1_f14_units.py::TestConvertVectors::test_main_spec_vectors"
+  fixtures: ["b-calc-vec-05"]
+
+CALC-VEC-06:
+  spec: "extended-markdown §8.9"
+  text: "test vector at 28-digit precision: x = 32 degF to degC -> 0 degC"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_spec_vectors"
+    - "tests/unit/test_e1_f14_units.py::TestConvertVectors::test_main_spec_vectors"
+  fixtures: ["b-calc-vec-06"]
+
+CALC-VEC-07:
+  spec: "extended-markdown §8.9"
+  text: "test vector at 28-digit precision: x = 10 / 0 -> MDQ_CALC_ERROR"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_evaluation_errors"
+  fixtures: ["b-calc-vec-07"]
+
+CALC-VEC-08:
+  spec: "extended-markdown §8.9"
+  text: "test vector at 28-digit precision: x = 2 kg + 3 m -> MDQ_CALC_ERROR"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_evaluation_errors"
+  fixtures: ["b-calc-vec-08"]
+
+CALC-VEC-09:
+  spec: "extended-markdown §8.9"
+  text: "test vector at 28-digit precision: x = 1 + 2; y = 3 -> MDQ_CALC_ERROR"
+  tests:
+    - "tests/unit/test_e1_f15_eval.py::test_syntax_and_lexer_errors_still_surface"
+    - "tests/unit/test_e1_f12_parser.py::test_syntax_errors"
+  fixtures: ["b-calc-vec-09"]
+
+CALC-VEC-10:
+  spec: "extended-markdown §8.9"
+  text: "test vector at 28-digit precision: x = stock(\"AAPL\") -> MDQ_CALC_ERROR"
+  tests:
+    - "tests/unit/test_e1_f11_lexer.py::test_lexer_errors_have_code_line_and_column"
+  fixtures: ["b-calc-vec-10"]
+
+DET-RESULT:
+  spec: "extended-markdown §9"
+  text: "the compiled result MUST be deterministic for fixed inputs and configuration"
+  tests:
+    - "tests/unit/test_e8_f81a_compile.py::test_results_are_frozen_and_deterministic"
+    - "tests/unit/test_e8_f82_api_quality.py::test_eight_threads_give_identical_results"
+    - "tests/unit/test_e8_f82_api_quality.py::test_threads_with_errors_and_successes_mixed"
+
+DET-RESOLVER-REPRODUCIBLE:
+  spec: "extended-markdown §9"
+  text: "with optional source resolvers invoked by the host, fixed-input builds MUST remain reproducible (recorded snapshots replay offline)"
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_snapshot_replay_is_identical_and_offline"
+    - "tests/unit/test_e8_f81b_data.py::test_source_variable_from_a_snapshot"
+    - "tests/unit/test_e8_f81b_data.py::test_compile_never_fetches"
+
+SEC-BOUND-RECURSION:
+  spec: "extended-markdown §10"
+  text: "processors MUST bound recursion depth (imports, block nesting, calc expression nesting)"
+  tests:
+    - "tests/unit/test_e4_f44_imports.py::test_depth_limit"
+    - "tests/unit/test_e3_f32_blocks.py::test_nesting_limit"
+    - "tests/unit/test_e1_f12_parser.py::test_nesting_limit_parentheses"
+
+SEC-BOUND-EXPANDED-BYTES:
+  spec: "extended-markdown §10"
+  text: "processors MUST bound total expanded bytes"
+  tests:
+    - "tests/unit/test_e4_f44_imports.py::test_output_byte_limit"
+    - "tests/unit/test_e4_f44_imports.py::test_expansion_bomb_fails_fast"
+    - "tests/unit/test_e4_f44_imports.py::test_max_expansions"
+
+SEC-BOUND-LOOP-ITERATIONS:
+  spec: "extended-markdown §10"
+  text: "processors MUST bound loop iterations"
+  tests:
+    - "tests/unit/test_e3_f34_eval.py::test_iteration_cap"
+    - "tests/unit/test_e3_f34_eval.py::test_default_iteration_cap"
+    - "tests/unit/test_e8_f81a_compile.py::test_limits"
+
+SEC-BOUND-ARCHIVE-EXPANSION:
+  spec: "extended-markdown §10"
+  text: "processors MUST bound archive expansion"
+  tests:
+    - "tests/unit/test_e7_f71_zip.py::test_zero_bomb_refused_by_ratio"
+    - "tests/unit/test_e7_f71_zip.py::test_inflate_bomb_stops_at_the_limit"
+    - "tests/unit/test_e7_f71_zip.py::test_total_size_limit"
+
+SEC-HTML-SANITISE:
+  spec: "extended-markdown §10"
+  text: "raw HTML and links MUST be sanitised by HTML renderers according to their host threat model"
+  na: "MDQ emits Markdown only and has no HTML renderer; the obligation falls on the downstream HTML renderer (spec: Markdown preprocessing alone is not an HTML sandbox)"
+
+SEC-NO-PLAINTEXT-EXPORT:
+  spec: "extended-markdown §10"
+  text: "sensitive (encrypted) data MUST NOT be exported in plaintext unless the trusted host explicitly authorises it"
+  tests:
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_encrypted_package_needs_plaintext_permission"
+    - "tests/unit/test_e8_f83_cli.py::test_encrypted_package"
+
+DIAG-PATH-LOCATION:
+  spec: "extended-markdown §11"
+  text: "errors MUST include source path and location where available"
+  tests:
+    - "tests/unit/test_e8_f81a_compile.py::test_import_errors_carry_the_imported_path"
+    - "tests/unit/test_e8_f81a_compile.py::test_metadata_errors_carry_the_file"
+    - "tests/unit/test_e8_f81a_compile.py::test_calc_error_line_is_exact_after_removed_branches"
+  fixtures: ["b-diag-calc-error-in-import", "b-diag-undefined-variable-located", "b-diag-missing-import-located"]
+
+UCAT-TABLE-TSV-SYNC:
+  spec: "calculation-units (preamble)"
+  text: "The machine-readable table is units.tsv; the table in section 4 is generated from it, and the two MUST NOT diverge."
+  tests:
+    - "tests/unit/test_e1_f14_units.py::TestCatalogueData::test_markdown_table_in_sync_with_tsv"
+
+UCAT-NO-INTERMEDIATE-ROUNDING:
+  spec: "calculation-units §2 (PROPOSED, G13)"
+  text: "Intermediate steps MUST NOT be rounded; an implementation that rounds after each step is not conforming."
+  tests:
+    - "tests/unit/test_e1_f14_units.py::TestConvertVectors::test_single_rounding_not_per_step"
+    - "tests/unit/test_e1_f14_units.py::TestConvertVectors::test_spec_document_vectors"
+    - "tests/unit/test_e1_f14_units.py::TestAgainstIndependentOracle::test_every_pair_on_fixed_values"
+  fixtures: ["c-ucat-degf-to-degc-single-rounding", "c-ucat-psi-to-pa-single-rounding", "c-ucat-kmh-to-ms-single-rounding"]
+
+UCAT-UNKNOWN-TOKENS-REJECTED:
+  spec: "calculation-units §3"
+  text: "mile, Miles, KM, Kg, l, KB, mb, C, F, sec, hr and metre are all unknown and MUST be rejected, never guessed."
+  tests:
+    - "tests/unit/test_e1_f14_units.py::TestLookup::test_unknown_or_miscased_symbols_rejected"
+    - "tests/unit/test_e1_f11_lexer.py::test_lexer_errors_have_code_line_and_column"
+    - "tests/unit/test_e1_f14_units.py::TestConvertNegative::test_unknown_unit_either_side"
+  fixtures: ["c-ucat-unknown-unit-mile", "c-ucat-unknown-unit-miles-upper", "c-ucat-unknown-unit-km-upper", "c-ucat-unknown-unit-kg-upper", "c-ucat-unknown-unit-l", "c-ucat-unknown-unit-kb-upper", "c-ucat-unknown-unit-mb", "c-ucat-unknown-unit-sec", "c-ucat-unknown-unit-hr", "c-ucat-unknown-unit-metre", "c-ucat-unknown-unit-after-to"]
+
+UCAT-UNIT-POSITION-ONLY:
+  spec: "calculation-units §3"
+  text: "A unit token is recognised only in a unit position: after a number, or after `to`."
+  tests:
+    - "tests/unit/test_e1_f11_lexer.py::test_unit_like_words_are_identifiers_outside_unit_position"
+    - "tests/unit/test_e1_f11_lexer.py::test_every_catalogue_symbol_is_a_unit_after_a_number"
+    - "tests/unit/test_e1_f14_units.py::TestMatchAt::test_identifier_characters_block_a_match"
+  fixtures: ["c-ucat-unit-word-outside-unit-position", "c-ucat-unit-after-number-and-after-to"]
+
+UCAT-DELTAK-RESULT-ONLY:
+  spec: "calculation-units §3 (PROPOSED, G14)"
+  text: "deltaK is RESULT-ONLY: it MUST NOT be accepted as a unit token in calc source, including after `to`."
+  tests:
+    - "tests/unit/test_e1_f11_lexer.py::test_deltaK_is_not_a_token"
+    - "tests/unit/test_e1_f14_units.py::TestMatchAt::test_match"
+  fixtures: ["c-ucat-deltak-after-number-rejected", "c-ucat-deltak-after-to-rejected", "c-ucat-deltak-as-result"]
+
+UCAT-NO-C-F-TEMPERATURE:
+  spec: "calculation-units §7"
+  text: "`C` and `F` MUST NOT denote temperature units."
+  tests:
+    - "tests/unit/test_e1_f14_units.py::TestLookup::test_unknown_or_miscased_symbols_rejected"
+    - "tests/unit/test_e1_f11_lexer.py::test_lexer_errors_have_code_line_and_column"
+  fixtures: ["c-ucat-c-is-not-celsius", "c-ucat-f-is-not-fahrenheit"]
+
+SRC-REPORT-UNSUPPORTED:
+  spec: "sources-and-permissions (preamble), §2"
+  text: "Implementations MAY omit the optional HTTP resolver, but MUST report unsupported required capabilities rather than silently fetching or dropping values."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_unsupported_is_reported_even_without_consent"
+    - "tests/unit/test_e8_f81b_data.py::test_compile_never_fetches"
+    - "tests/unit/test_e8_f81b_data.py::test_missing_host_value"
+  fixtures: ["c-src-inline-source-without-snapshot-is-unresolved", "c-src-inline-source-unused-still-unresolved", "c-src-unknown-kind-fails", "c-src-host-value-missing"]
+
+SRC-TYPE-CHECK-BEFORE-INJECTION:
+  spec: "sources-and-permissions §2"
+  text: "Source outputs MUST be type-checked before injection."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_type_mismatch"
+    - "tests/unit/test_e6_f65_resolver.py::test_snapshot_values_are_type_checked"
+    - "tests/unit/test_e8_f81b_data.py::test_host_supplied_values_are_type_checked"
+  fixtures: ["c-src-host-value-type-mismatch", "c-src-host-value-bool-for-number"]
+
+SRC-NO-CREDENTIALS:
+  spec: "sources-and-permissions §2"
+  text: "The core format MUST NOT contain credentials."
+  tests:
+    - "tests/unit/test_e6_f61_sources.py::test_credential_keys_are_rejected_with_a_clear_message"
+    - "tests/unit/test_e6_f63_net.py::test_credentials_are_denied"
+  fixtures: ["c-src-credentials-in-url", "c-src-credential-key"]
+
+SRC-CORE-VALIDATE:
+  spec: "sources-and-permissions §3"
+  text: "The core Rust/Python libraries MUST parse and validate declarations."
+  tests:
+    - "tests/unit/test_e6_f61_sources.py::test_invalid_declarations"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_validate_sources_across_layers"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_validate_sources_in_a_package_and_errors"
+  fixtures: ["c-src-invalid-json-pointer", "c-src-named-source-unknown-reference", "c-src-named-source-unknown-argument", "c-src-non-get-method", "c-src-bad-declared-type"]
+
+SRC-CORE-ACCEPT-RESOLVED:
+  spec: "sources-and-permissions §3"
+  text: "The core libraries MUST accept resolved typed variables."
+  tests:
+    - "tests/unit/test_e8_f81b_data.py::test_source_variable_from_a_snapshot"
+    - "tests/unit/test_e8_f81b_data.py::test_host_supplied_values_from_inputs"
+  fixtures: ["c-src-host-value-accepted"]
+
+SRC-CORE-NO-IO:
+  spec: "sources-and-permissions §3"
+  text: "The core libraries MUST calculate without I/O."
+  tests:
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_compile_never_takes_a_transport"
+    - "tests/unit/test_e6_f65_resolver.py::test_snapshot_replay_is_identical_and_offline"
+    - "tests/unit/test_e8_f83_cli.py::test_cli_never_opens_a_socket"
+
+SRC-CORE-STRUCTURED-DIAGNOSTICS:
+  spec: "sources-and-permissions §3"
+  text: "The core libraries MUST emit structured diagnostics."
+  tests:
+    - "tests/unit/test_e8_f81b_data.py::test_declaration_errors_are_located"
+    - "tests/unit/test_e6_f61_sources.py::test_the_message_names_the_location"
+    - "tests/unit/test_e6_f61_sources.py::test_first_line_is_used_for_yaml_errors"
+
+SRC-RESOLVER-DEFAULT-DISABLED:
+  spec: "sources-and-permissions §3, §4"
+  text: "The optional resolver MUST default to disabled."
+  tests:
+    - "tests/unit/test_e6_f64_policy.py::test_default_is_deny"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_both_trusted_layers_must_allow"
+    - "tests/unit/test_e6_f65_resolver.py::test_allow_network_false_wins_even_with_open_policy"
+
+SRC-RESOLVER-NOT-ON-OPEN:
+  spec: "sources-and-permissions §3"
+  text: "The optional resolver MUST NOT run automatically on document open."
+  tests:
+    - "tests/unit/test_e8_f81b_data.py::test_compile_never_fetches"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_compile_never_takes_a_transport"
+    - "tests/unit/test_e8_f83_cli.py::test_cli_never_opens_a_socket"
+  fixtures: ["c-src-inline-source-without-snapshot-is-unresolved"]
+
+SRC-INJECTION-INTERFACE:
+  spec: "sources-and-permissions §3"
+  text: "The library MUST offer an injection interface so readers can supply their own resolver or pre-resolved values."
+  tests:
+    - "tests/unit/test_e8_f81b_data.py::test_source_variable_from_a_snapshot"
+    - "tests/unit/test_e8_f81b_data.py::test_host_supplied_values_from_inputs"
+    - "tests/unit/test_e6_f65_resolver.py::test_json_source_result_and_requests"
+  fixtures: ["c-src-host-value-accepted"]
+
+SRC-TEST-SUCCESS-FIELDS:
+  spec: "sources-and-permissions §3"
+  text: "A successful test MUST include value, type, unit if any, retrieval time and source identity."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_json_source_result_and_requests"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_test_source_round_trip"
+
+SRC-TEST-FAIL-PERMISSION:
+  spec: "sources-and-permissions §3"
+  text: "Failures MUST distinguish permission denial (MDQ_SECURITY_DENIED)."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_allow_network_false_wins_even_with_open_policy"
+    - "tests/unit/test_e6_f65_resolver.py::test_denied_before_any_transport_call"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_test_source_argument_and_declaration_errors"
+
+SRC-TEST-FAIL-TRANSPORT:
+  spec: "sources-and-permissions §3"
+  text: "Failures MUST distinguish HTTP/transport errors (MDQ_SOURCE_FETCH_FAILED)."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_non_success_status"
+    - "tests/unit/test_e6_f65_resolver.py::test_transport_exception_becomes_fetch_failed"
+    - "tests/unit/test_e6_f65_resolver.py::test_transport_timeout"
+
+SRC-TEST-FAIL-SELECTION:
+  spec: "sources-and-permissions §3"
+  text: "Failures MUST distinguish selection failure (MDQ_SOURCE_UNRESOLVED)."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_selection_failure_is_unresolved"
+    - "tests/unit/test_e6_f62_select_types.py::test_selection_failures_are_unresolved"
+
+SRC-TEST-FAIL-INVALID-DATA:
+  spec: "sources-and-permissions §3"
+  text: "Failures MUST distinguish invalid data (MDQ_SOURCE_INVALID)."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_invalid_json"
+    - "tests/unit/test_e6_f65_resolver.py::test_invalid_utf8"
+    - "tests/unit/test_e6_f62_select_types.py::test_invalid_json_documents"
+
+SRC-TEST-FAIL-TYPE:
+  spec: "sources-and-permissions §3"
+  text: "Failures MUST distinguish type mismatch (MDQ_SOURCE_TYPE_ERROR)."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_type_mismatch"
+    - "tests/unit/test_e6_f65_resolver.py::test_text_type_mismatch"
+
+SRC-OPS-SEPARATE:
+  spec: "sources-and-permissions §3"
+  text: "Both operations (validate_source offline, test_source live) MUST be separately callable."
+  tests:
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_validate_sources_across_layers"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_test_source_round_trip"
+
+SRC-TESTS-MOCK-TRANSPORT:
+  spec: "sources-and-permissions §3"
+  text: "Tests MUST use a local stub/mock transport by default, not public APIs."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_no_route_in_the_fake_is_a_transport_failure"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_test_source_round_trip"
+    - "tests/unit/test_e8_f83_cli.py::test_cli_never_opens_a_socket"
+
+SRC-READER-CAN-RESTRICT:
+  spec: "sources-and-permissions §4"
+  text: "The library MAY ship its own policy engine and host allowlist; the reader MUST be able to further restrict it."
+  tests:
+    - "tests/unit/test_e6_f64_policy.py::test_default_is_deny"
+    - "tests/unit/test_e6_f64_policy.py::test_limits_take_the_minimum_with_defaults_and_caps"
+    - "tests/unit/test_e6_f64_policy.py::test_intersection_is_exactly_the_hosts_matched_by_both"
+
+SRC-PROVENANCE-FIELDS:
+  spec: "sources-and-permissions §5"
+  text: "Resolved external values MUST carry source identity, retrieved-at timestamp, value, type, unit and, when relevant, observation/valuation timestamp, currency and market."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_json_source_result_and_requests"
+    - "tests/unit/test_e8_f81b_data.py::test_source_variable_from_a_snapshot"
+    - "tests/unit/test_e1_f16_fx.py::test_selection_returns_the_whole_record"
+
+SRC-CACHE-KEY:
+  spec: "sources-and-permissions §5"
+  text: "Cached values MUST be keyed by normalised declaration, arguments, date and provider identity."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_declaration_key_matches_python_json"
+    - "tests/unit/test_e6_f65_resolver.py::test_key_is_identity_not_url"
+    - "tests/unit/test_e6_f65_resolver.py::test_snapshot_mismatch_is_unresolved"
+
+SRC-CACHE-NOT-PERMISSION:
+  spec: "sources-and-permissions §5"
+  text: "A cache is not permission to make a new request."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_snapshot_replay_is_identical_and_offline"
+    - "tests/unit/test_e8_f81b_data.py::test_compile_never_fetches"
+
+SRC-OFFLINE-SNAPSHOTS:
+  spec: "sources-and-permissions §5"
+  text: "Offline deterministic builds MUST use explicit resolved snapshots."
+  tests:
+    - "tests/unit/test_e8_f81b_data.py::test_source_variable_from_a_snapshot"
+    - "tests/unit/test_e8_f81b_data.py::test_input_for_a_source_variable_is_refused"
+    - "tests/unit/test_e8_f83_cli.py::test_snapshot_file"
+  fixtures: ["c-src-inline-source-without-snapshot-is-unresolved", "c-src-input-cannot-replace-source-variable"]
+
+SRC-NO-STALE-SUBSTITUTE:
+  spec: "sources-and-permissions §5"
+  text: "A failed fetch MUST NOT silently substitute stale data or today's price."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_failed_fetch_never_falls_back_to_a_snapshot"
+    - "tests/unit/test_e1_f16_fx.py::test_no_request_means_unresolved"
+    - "tests/unit/test_e1_f16_fx.py::test_no_observation_at_or_before_the_valuation"
+  fixtures: ["c-src-missing-valuation-rate"]
+
+SRC-CONF-INLINE-FRONTMATTER:
+  spec: "sources-and-permissions §6"
+  text: "The conformance suite MUST include: inline frontmatter source."
+  tests:
+    - "tests/unit/test_e6_f61_sources.py::test_inline_source_defaults"
+    - "tests/unit/test_e8_f81b_data.py::test_source_variable_from_a_snapshot"
+  fixtures: ["c-src-inline-source-without-snapshot-is-unresolved"]
+
+SRC-CONF-NAMED-INHERITED:
+  spec: "sources-and-permissions §6"
+  text: "The conformance suite MUST include: named inherited project source."
+  tests:
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_validate_sources_across_layers"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_test_source_round_trip"
+    - "tests/unit/test_e6_f61_sources.py::test_named_source_with_arguments"
+  fixtures: ["c-src-named-inherited-project-source-is-unresolved", "c-src-named-source-used-from-frontmatter", "c-src-named-source-unknown-reference"]
+
+SRC-CONF-DOCUMENT-OVERRIDE:
+  spec: "sources-and-permissions §6"
+  text: "The conformance suite MUST include: document override."
+  tests:
+    - "tests/unit/test_e6_f61_sources.py::test_source_arguments_are_defaults_and_variable_arguments_override"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_compile_package_entrypoint_and_layers"
+  fixtures: ["c-src-document-override-of-project-variable"]
+
+SRC-CONF-OFFLINE-VALIDATION:
+  spec: "sources-and-permissions §6"
+  text: "The conformance suite MUST include: offline validation."
+  tests:
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_validate_sources_across_layers"
+    - "tests/unit/test_e6_f65_resolver.py::test_snapshot_replay_is_identical_and_offline"
+    - "tests/unit/test_e8_f83_cli.py::test_check_and_sources_text"
+  fixtures: ["c-src-invalid-json-pointer"]
+
+SRC-CONF-NETWORK-DENIED:
+  spec: "sources-and-permissions §6"
+  text: "The conformance suite MUST include: network-denied live test."
+  tests:
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_test_source_argument_and_declaration_errors"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_both_trusted_layers_must_allow"
+    - "tests/unit/test_e6_f65_resolver.py::test_allow_network_false_wins_even_with_open_policy"
+
+SRC-CONF-MOCK-JSON-POINTER:
+  spec: "sources-and-permissions §6"
+  text: "The conformance suite MUST include: mocked successful JSON Pointer retrieval."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_json_source_result_and_requests"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_test_source_round_trip"
+    - "tests/unit/test_e6_f62_select_types.py::test_rfc6901_section5_vectors"
+
+SRC-CONF-INVALID-POINTER:
+  spec: "sources-and-permissions §6"
+  text: "The conformance suite MUST include: invalid pointer."
+  tests:
+    - "tests/unit/test_e6_f62_select_types.py::test_invalid_pointer_syntax"
+    - "tests/unit/test_e6_f65_resolver.py::test_selection_failure_is_unresolved"
+  fixtures: ["c-src-invalid-json-pointer"]
+
+SRC-CONF-BAD-TYPE:
+  spec: "sources-and-permissions §6"
+  text: "The conformance suite MUST include: bad type."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_type_mismatch"
+    - "tests/unit/test_e6_f65_resolver.py::test_snapshot_values_are_type_checked"
+    - "tests/unit/test_e8_f81b_data.py::test_host_supplied_values_are_type_checked"
+  fixtures: ["c-src-host-value-type-mismatch", "c-src-bad-declared-type"]
+
+SRC-CONF-UNSUPPORTED-SCHEME:
+  spec: "sources-and-permissions §6"
+  text: "The conformance suite MUST include: unsupported scheme."
+  tests:
+    - "tests/unit/test_e6_f63_net.py::test_non_https_schemes_are_denied"
+    - "tests/unit/test_e6_f61_sources.py::test_the_message_names_the_location"
+  fixtures: ["c-src-unsupported-scheme-http", "c-src-unsupported-scheme-file"]
+
+SRC-CONF-PRIVATE-ADDRESS:
+  spec: "sources-and-permissions §6"
+  text: "The conformance suite MUST include: private address."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_resolved_private_address_is_denied_before_get"
+    - "tests/unit/test_e6_f65_resolver.py::test_blocked_urls_are_denied_without_calls"
+    - "tests/unit/test_e6_f63_net.py::test_blocked_addresses"
+
+SRC-CONF-REDIRECT-PRIVATE:
+  spec: "sources-and-permissions §6"
+  text: "The conformance suite MUST include: redirect to private address."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_redirect_to_private_or_insecure_target_is_denied"
+    - "tests/unit/test_e6_f65_resolver.py::test_redirect_to_other_host_resolves_and_checks_it"
+
+SRC-CONF-OVERSIZED-RESPONSE:
+  spec: "sources-and-permissions §6"
+  text: "The conformance suite MUST include: oversized response."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_body_size_limit"
+
+SRC-CONF-TIMEOUT:
+  spec: "sources-and-permissions §6"
+  text: "The conformance suite MUST include: timeout."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_transport_timeout"
+    - "tests/unit/test_e6_f65_resolver.py::test_slow_loris_elapsed_over_budget"
+    - "tests/unit/test_e6_f65_resolver.py::test_budget_shrinks_over_a_redirect_chain"
+
+SRC-CONF-MISSING-VALUATION-RATE:
+  spec: "sources-and-permissions §6"
+  text: "The conformance suite MUST include: missing valuation rate."
+  tests:
+    - "tests/unit/test_e1_f16_fx.py::test_no_request_means_unresolved"
+    - "tests/unit/test_e1_f16_fx.py::test_no_observation_at_or_before_the_valuation"
+    - "tests/unit/test_e8_f81b_data.py::test_currency_conversion_with_observations"
+  fixtures: ["c-src-missing-valuation-rate"]
+
+SRC-CONF-SNAPSHOT-EVALUATION:
+  spec: "sources-and-permissions §6"
+  text: "The conformance suite MUST include: reproducible snapshot evaluation."
+  tests:
+    - "tests/unit/test_e6_f65_resolver.py::test_snapshot_replay_is_identical_and_offline"
+    - "tests/unit/test_e8_f81b_data.py::test_source_variable_from_a_snapshot"
+    - "tests/unit/test_e8_f83_cli.py::test_snapshot_file"
+
+PKG-NATIVE-NOT-MDZIP-CONSTRAINED:
+  spec: "package (preamble)"
+  text: "Native .mdq MUST NOT be constrained to MDZip features."
+  tests:
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_package_calc_and_inputs"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_other_entry_inside_a_package_and_imports_and_data"
+    - "tests/unit/test_e7_f72_manifest.py::test_all_known_profiles_accepted"
+
+PKG-MDZIP-EXPORT-REPORTS-UNSUPPORTED:
+  spec: "package (preamble)"
+  text: "MDZip export MUST report unsupported MDQ features."
+  na: "MDZip export is not implemented: the spec defers MDZip compatibility to the next draft and forbids claiming it before a fixture/manifest comparison."
+
+PKG-MDZIP-STRICT-EXPORT-FAILS-ON-LOSS:
+  spec: "package (preamble)"
+  text: "Strict MDZip export fails on loss; explicitly requested compatible export MAY materialise computed values."
+  na: "MDZip export is not implemented (deferred by the spec, reserved for the next draft)."
+
+PKG-ZIP-ARCHIVE:
+  spec: "package §bullets"
+  text: ".mdq MUST be a ZIP-compatible archive."
+  tests:
+    - "tests/unit/test_e7_f71_zip.py::test_stdlib_round_trip_deflate_and_stored"
+    - "tests/unit/test_e7_f71_zip.py::test_not_a_zip"
+    - "tests/unit/test_e7_f72_manifest.py::test_open_valid_package"
+
+PKG-UTF8-MEMBER-NAMES:
+  spec: "package §bullets"
+  text: ".mdq MUST have UTF-8 member names."
+  tests:
+    - "tests/unit/test_e7_f71_zip.py::test_non_utf8_names"
+    - "tests/unit/test_e7_f71_zip.py::test_utf8_names"
+
+PKG-ROOT-MANIFEST:
+  spec: "package §bullets"
+  text: ".mdq MUST have a root manifest.yaml."
+  tests:
+    - "tests/unit/test_e7_f72_manifest.py::test_missing_root_manifest"
+
+PKG-MARKDOWN-ENTRYPOINT:
+  spec: "package §bullets"
+  text: ".mdq MUST have a Markdown entrypoint."
+  tests:
+    - "tests/unit/test_e7_f72_manifest.py::test_bad_entrypoint"
+    - "tests/unit/test_e7_f72_manifest.py::test_entrypoint_must_be_a_member"
+
+PKG-MANIFEST-FORMAT:
+  spec: "package §bullets"
+  text: "The manifest MUST declare `format: mdq`."
+  tests:
+    - "tests/unit/test_e7_f72_manifest.py::test_format"
+    - "tests/unit/test_e7_f72_manifest.py::test_required_keys"
+
+PKG-MANIFEST-VERSION:
+  spec: "package §bullets"
+  text: "The manifest MUST declare a supported `version`."
+  tests:
+    - "tests/unit/test_e7_f72_manifest.py::test_version"
+    - "tests/unit/test_e7_f72_manifest.py::test_required_keys"
+
+PKG-MANIFEST-ENTRYPOINT:
+  spec: "package §bullets"
+  text: "The manifest MUST declare `entrypoint`."
+  tests:
+    - "tests/unit/test_e7_f72_manifest.py::test_required_keys"
+    - "tests/unit/test_e7_f72_manifest.py::test_entrypoint_is_normalised"
+
+PKG-MANIFEST-FEATURES:
+  spec: "package §bullets"
+  text: "The manifest MUST declare required `features`."
+  tests:
+    - "tests/unit/test_e7_f72_manifest.py::test_features"
+    - "tests/unit/test_e7_f72_manifest.py::test_required_keys"
+    - "tests/unit/test_e7_f72_manifest.py::test_spec_example_verbatim"
+
+PKG-VERIFY-MEMBER-NAMES:
+  spec: "package §bullets"
+  text: "The reader MUST verify archive member names."
+  tests:
+    - "tests/unit/test_e7_f71_zip.py::test_hostile_names"
+    - "tests/unit/test_e7_f71_zip.py::test_messages_never_contain_names"
+
+PKG-REJECT-TRAVERSAL-ABSOLUTE:
+  spec: "package §bullets"
+  text: "The reader MUST reject traversal/absolute paths."
+  tests:
+    - "tests/unit/test_e7_f71_zip.py::test_hostile_names"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_package_fs_rejects_bad_packages"
+
+PKG-REJECT-DUPLICATES:
+  spec: "package §bullets"
+  text: "The reader MUST reject duplicate members."
+  tests:
+    - "tests/unit/test_e7_f71_zip.py::test_duplicates_and_collisions"
+
+PKG-REJECT-SYMLINKS:
+  spec: "package §bullets"
+  text: "The reader MUST reject symlinks unless explicitly supported."
+  tests:
+    - "tests/unit/test_e7_f71_zip.py::test_symlink_from_stdlib_attrs"
+    - "tests/unit/test_e7_f71_zip.py::test_file_types"
+
+PKG-REJECT-COMPRESSION-RATIO:
+  spec: "package §bullets"
+  text: "The reader MUST reject excessive compression ratios."
+  tests:
+    - "tests/unit/test_e7_f71_zip.py::test_zero_bomb_refused_by_ratio"
+    - "tests/unit/test_e7_f71_zip.py::test_ratio_boundary"
+
+PKG-REJECT-OVERSIZED-MEMBERS:
+  spec: "package §bullets"
+  text: "The reader MUST reject oversized members."
+  tests:
+    - "tests/unit/test_e7_f71_zip.py::test_member_size_limit"
+    - "tests/unit/test_e7_f71_zip.py::test_lying_declared_size_is_bounded"
+
+PKG-REJECT-EXPANSION-LIMITS:
+  spec: "package §bullets"
+  text: "The reader MUST reject expansion beyond resource limits."
+  tests:
+    - "tests/unit/test_e7_f71_zip.py::test_total_size_limit"
+    - "tests/unit/test_e7_f71_zip.py::test_inflate_bomb_stops_at_the_limit"
+    - "tests/unit/test_e7_f71_zip.py::test_entry_limit"
+
+PKG-MARKDOWN-SEMANTICS:
+  spec: "package §bullets"
+  text: "The entrypoint and referenced Markdown files MUST follow Extended Markdown syntax and security semantics."
+  tests:
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_other_entry_inside_a_package_and_imports_and_data"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_package_calc_and_inputs"
+
+PKG-AGE-ENCRYPTION:
+  spec: "package §bullets (SHOULD)"
+  text: "Encrypted resources SHOULD use established `age` file encryption; `.mdq.age` denotes whole-package encryption."
+  tests:
+    - "tests/unit/test_e7_f73_age.py::test_open_encrypted_package_from_pyrage"
+    - "tests/unit/test_e7_f73_age.py::test_pyrage_to_us_and_back"
+    - "tests/unit/test_e7_f73_age.py::test_per_member_encryption_layout"
+
+PKG-NO-ENCRYPTION-CLAIM:
+  spec: "package §bullets"
+  text: "A reader MUST NOT claim a ZIP archive is encrypted simply because its manifest says so."
+  tests:
+    - "tests/unit/test_e7_f73_age.py::test_manifest_cannot_claim_encryption"
+    - "tests/unit/test_e7_f73_age.py::test_no_implicit_decryption"
+
+PKG-NO-SELF-GRANT:
+  spec: "package §bullets"
+  text: "A package MUST NOT grant itself permissions."
+  tests:
+    - "tests/unit/test_e7_f72_manifest.py::test_security_cannot_grant_or_carry_other_keys"
+    - "tests/unit/test_e7_f72_manifest.py::test_requests_feed_the_policy_engine_and_never_grant"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_encrypted_package_needs_plaintext_permission"
+
+PKG-HOST-COMPUTES-PERMISSIONS:
+  spec: "package §bullets"
+  text: "Effective permissions MUST be computed by the host and optional library policy engine as described in sources-and-permissions.md."
+  tests:
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_manifest_requests_apply_to_packages"
+    - "tests/unit/test_e7_f72_manifest.py::test_requests_feed_the_policy_engine_and_never_grant"
+
+PKG-OPEN-NO-FETCH:
+  spec: "package §bullets"
+  text: "Opening a package MUST NOT automatically fetch remote data."
+  tests:
+    - "tests/unit/test_e7_f72_manifest.py::test_opening_never_fetches"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_compile_never_takes_a_transport"
+
+PKG-RESOLVER-ONLY-AFTER-AUTHORISATION:
+  spec: "package §bullets"
+  text: "A reader MAY invoke an optional library HTTP resolver only after explicit authorisation."
+  tests:
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_manifest_requests_apply_to_packages"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_both_trusted_layers_must_allow"
+
+PKG-OFFLINE-AND-VALIDATION-AVAILABLE:
+  spec: "package §bullets"
+  text: "Offline operation and source validation MUST remain available."
+  tests:
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_validate_sources_in_a_package_and_errors"
+    - "tests/unit/test_e8_f81c_packages_sources.py::test_plain_package_needs_no_permission"
+    - "tests/unit/test_e8_f83_cli.py::test_plain_package"
+
+PKG-RESERVED-NEXT-DRAFT:
+  spec: "package §bullets"
+  text: "Signatures, content-addressed integrity, MDZip compatibility, canonical archive ordering and cryptographic manifest binding are reserved for the next draft."
+  na: "Reserved by the spec for the next draft; nothing to implement or test in 0.1."

@@ -22,6 +22,31 @@ Per feature. Veto by editing or telling me. Test-plan gap rows (G-numbers) in `d
 **Open**
 - Per-member encryption layout (spec gap 4): strict xfail `test_per_member_encryption_layout`.
 
+## Cross-cutting: rule ledger and conformance fixtures (G56)
+**Decisions**
+- Linking: each rule in `conformance/rules.yaml` lists the tests that cover it by pytest node ID and/or conformance fixture ID; a meta-test fails if a listed test or fixture does not exist, or a rule has neither. Existing test files stay untouched (new tests may also use `@pytest.mark.rule`).
+- Scope: every normative MUST/MUST NOT now (about 100 rules), each with at least one test or fixture; a rule without a test gets a new fixture; an ambiguous one a strict xfail with its gap ID.
+- CLI parity: every fixture also runs through `mdq.cli.main([..., "--format", "json"])` in-process and must agree with the library (markdown, diagnostic code/path/line) and the CLI schema; a handful also run as a real `mdq` subprocess.
+- Built with three parallel mapping passes (spec 1-7, 8-11, the other spec files); every cited test was read before being cited, every fixture was run before its expectation was recorded, and an expectation that would bless spec-violating behaviour was recorded as a BUG instead. 172 rules, 155 fixtures.
+- `xfail` tags: `G<n>`/`GAP-<n>` for spec gaps, `BUG-<n>` for known defects listed below (the schema allows exactly these).
+
+**Bugs found (strict xfail fixtures, to fix or decide)**
+- BUG-1: `[[...]]` reference/wiki links stay literal in compile output (recorded as a choice in E8.1a), but spec §1, §3 and §3.1 require them to be rewritten to the compiled target or fail with MDQ_UNRESOLVED_REFERENCE (`See [[b.md#Nope]]` compiles silently). Needs your decision: implement reference links, or amend the spec.
+- BUG-2: duplicate block IDs in one source document are not detected by compile (`a ^p1` / `b ^p1` compiles); only `#^id` embeds index the target. Spec §3: IDs MUST be unique per source document.
+- BUG-3: generated heading anchors ignore user block IDs (`Para ^a` + `# A` gives a TOC link `#a`); spec §3.1 gives the block ID priority (generated one should become `a-2`). `slug_dedupe` already takes reserved names; `toc_build`/compile do not pass them.
+
+**Other findings (no xfail yet)**
+- An MDQ_MISSING_IMPORT raised inside an INCLUDED `:::if` branch reports line 1 instead of 2 (no branch was removed, so this is beyond the known approximation).
+- The reserved-namespace MDQ_METADATA_ERROR and the unsupported `mdq`/`features` errors carry no path although the declaring file is known.
+- A missing host-supplied declared variable has a path but no line (the YAML loader keeps no value positions).
+- `CALC-PRECISION-IN-FIXTURES` (fixtures must state their precision) is met implicitly: precision is fixed at 28 (tested); the fixture format has no precision field. `CALC-PRECISION-EXPOSED` is met only through `_internal.dec_precision()`, not `mdq.version_info()`.
+- `CALC-EXPORT-COLLISION`: only the default MDQ_CALC_ERROR exists; compile has no "disambiguating namespace" option.
+- `SRC-CACHE-KEY`: there is no cache; the snapshot key covers the normalised declaration and arguments, not the date. Does "keyed by ... date" apply to snapshots?
+- `PKG-MARKDOWN-SEMANTICS`: path/URL security inside packages (`../`, `https://`, `/abs` imports and variable files) was checked by hand but no unit test asserts it for packages.
+
+**Sacrifices**
+- The fixture format covers single documents with inputs/profile/calc_blocks only; FX, limits, packages, transports and policy rules link unit tests instead of fixtures.
+
 ## Cross-cutting: sdist fix (G55)
 **Decisions**
 - The sdist carries `spec/units.tsv` through `[tool.maturin] include` (format sdist), at the same relative path, so `include_str!("../../../spec/units.tsv")` resolves when building from the sdist. The normative file in `spec/` stays the single copy (no duplicate in the crate to keep in sync).

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MDQ conformance fixture (TEST_PLAN 3.3)",
+  "type": "object",
+  "required": ["id", "rules", "files", "entry", "expect"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"},
+    "rules": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^[A-Z]+(-[A-Z0-9]+)+$"}},
+    "spec": {"type": "string"},
+    "files": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "string"}},
+    "entry": {"type": "string", "minLength": 1},
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "inputs": {"type": "object", "additionalProperties": {"type": ["integer", "boolean", "string"]}},
+        "profile": {"enum": ["commonmark", "gfm"]},
+        "calc_blocks": {"enum": ["remove", "keep"]}
+      }
+    },
+    "expect": {
+      "oneOf": [
+        {"type": "object", "required": ["output"], "additionalProperties": false,
+         "properties": {"output": {"type": "string"}}},
+        {"type": "object", "required": ["diagnostics"], "additionalProperties": false,
+         "properties": {"diagnostics": {"type": "array", "minItems": 1, "maxItems": 1, "items": {
+           "type": "object", "required": ["code"], "additionalProperties": false,
+           "properties": {"code": {"type": "string", "pattern": "^MDQ_[A-Z_]+$"},
+                          "path": {"type": "string"}, "line": {"type": "integer", "minimum": 1},
+                          "column": {"type": "integer", "minimum": 1}}}}}}
+      ]
+    },
+    "xfail": {"type": "string", "pattern": "^(G[0-9]+|GAP-[0-9]+|BUG-[0-9]+)\\b", "description": "strict xfail: a spec gap (G/GAP) or a known bug listed in docs/DECISIONS.md (BUG)"}
+  }
+}

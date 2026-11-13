@@ -1,0 +1,1265 @@
+[
+ {
+  "id": "b-calc-vec-01",
+  "rules": [
+   "CALC-VEC-01"
+  ],
+  "spec": "extended-markdown §8.9",
+  "files": {
+   "main.md": "```calc\nx = 10\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "v 10\n"
+  }
+ },
+ {
+  "id": "b-calc-vec-02",
+  "rules": [
+   "CALC-VEC-02"
+  ],
+  "spec": "extended-markdown §8.9",
+  "files": {
+   "main.md": "```calc\nx = 2 + 3 * 4\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "v 14\n"
+  }
+ },
+ {
+  "id": "b-calc-vec-03",
+  "rules": [
+   "CALC-VEC-03"
+  ],
+  "spec": "extended-markdown §8.9",
+  "files": {
+   "main.md": "```calc\nx = (2 + 3) * 4\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "v 20\n"
+  }
+ },
+ {
+  "id": "b-calc-vec-04",
+  "rules": [
+   "CALC-VEC-04"
+  ],
+  "spec": "extended-markdown §8.9",
+  "files": {
+   "main.md": "```calc\nx = 120 * 21%\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "v 25.2\n"
+  }
+ },
+ {
+  "id": "b-calc-vec-05",
+  "rules": [
+   "CALC-VEC-05"
+  ],
+  "spec": "extended-markdown §8.9",
+  "files": {
+   "main.md": "```calc\nx = 12 miles to km\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "v 19.312128 km\n"
+  }
+ },
+ {
+  "id": "b-calc-vec-06",
+  "rules": [
+   "CALC-VEC-06"
+  ],
+  "spec": "extended-markdown §8.9",
+  "files": {
+   "main.md": "```calc\nx = 32 degF to degC\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "v 0 degC\n"
+  }
+ },
+ {
+  "id": "b-calc-vec-07",
+  "rules": [
+   "CALC-VEC-07",
+   "CALC-DIV-ZERO"
+  ],
+  "spec": "extended-markdown §8.9",
+  "files": {
+   "main.md": "```calc\nx = 10 / 0\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-vec-08",
+  "rules": [
+   "CALC-VEC-08",
+   "UNIT-INCOMPATIBLE-REJECT"
+  ],
+  "spec": "extended-markdown §8.9",
+  "files": {
+   "main.md": "```calc\nx = 2 kg + 3 m\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-vec-09",
+  "rules": [
+   "CALC-VEC-09"
+  ],
+  "spec": "extended-markdown §8.9",
+  "files": {
+   "main.md": "```calc\nx = 1 + 2; y = 3\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-vec-10",
+  "rules": [
+   "CALC-VEC-10",
+   "CALC-NO-CODE-EVAL"
+  ],
+  "spec": "extended-markdown §8.9",
+  "files": {
+   "main.md": "```calc\nx = stock(\"AAPL\")\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-no-python-import",
+  "rules": [
+   "CALC-NO-CODE-EVAL"
+  ],
+  "spec": "extended-markdown §8",
+  "files": {
+   "main.md": "```calc\nx = __import__(\"os\")\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-no-function-call",
+  "rules": [
+   "CALC-NO-CODE-EVAL"
+  ],
+  "spec": "extended-markdown §8",
+  "files": {
+   "main.md": "```calc\nx = eval(1)\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-no-power-operator",
+  "rules": [
+   "CALC-NO-EXTRA-CONSTRUCTS"
+  ],
+  "spec": "extended-markdown §8, §8.5",
+  "files": {
+   "main.md": "```calc\nx = 2 ** 3\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-no-comparison",
+  "rules": [
+   "CALC-NO-EXTRA-CONSTRUCTS"
+  ],
+  "spec": "extended-markdown §8, §8.5",
+  "files": {
+   "main.md": "```calc\nx = 1 < 2\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-no-indexing",
+  "rules": [
+   "CALC-NO-EXTRA-CONSTRUCTS"
+  ],
+  "spec": "extended-markdown §8, §8.5",
+  "files": {
+   "main.md": "---\nvariables:\n  a: 1\n---\n```calc\nx = a[0]\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 6
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-no-conditional",
+  "rules": [
+   "CALC-NO-EXTRA-CONSTRUCTS"
+  ],
+  "spec": "extended-markdown §8, §8.5",
+  "files": {
+   "main.md": "```calc\nx = 1 if 1 else 2\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-no-boolean-literal",
+  "rules": [
+   "CALC-NO-EXTRA-CONSTRUCTS"
+  ],
+  "spec": "extended-markdown §8, §8.5",
+  "files": {
+   "main.md": "```calc\nx = true\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-no-inline-comment",
+  "rules": [
+   "CALC-NO-EXTRA-CONSTRUCTS"
+  ],
+  "spec": "extended-markdown §8.5",
+  "files": {
+   "main.md": "```calc\nx = 1 # c\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-no-scientific-notation",
+  "rules": [
+   "CALC-NO-EXTRA-CONSTRUCTS"
+  ],
+  "spec": "extended-markdown §8.5",
+  "files": {
+   "main.md": "```calc\nx = 1e3\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-no-chained-conversion",
+  "rules": [
+   "CALC-NO-EXTRA-CONSTRUCTS"
+  ],
+  "spec": "extended-markdown §8.5",
+  "files": {
+   "main.md": "```calc\nx = 5 km to m to ft\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-duplicate-assignment",
+  "rules": [
+   "CALC-UNIQUE-ASSIGNMENT"
+  ],
+  "spec": "extended-markdown §8.1",
+  "files": {
+   "main.md": "```calc\na = 1\nb = 2\na = 3\n```\nv {{calc.a}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 4
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-same-name-different-case",
+  "rules": [
+   "CALC-UNIQUE-ASSIGNMENT"
+  ],
+  "spec": "extended-markdown §8.1, §8.6",
+  "files": {
+   "main.md": "```calc\na = 1\nA = 2\n```\nv {{calc.a}} {{calc.A}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "v 1 2\n"
+  }
+ },
+ {
+  "id": "b-calc-28-digits-half-even",
+  "rules": [
+   "CALC-PRECISION-28"
+  ],
+  "spec": "extended-markdown §8.1, §8.7",
+  "files": {
+   "main.md": "```calc\nw = 2 / 3\nx = 1.0000000000000000000000000005 + 0\ny = 1.0000000000000000000000000015 + 0\nz = 1.0000000000000000000000000025 + 0\n```\nv {{calc.w}} {{calc.x}} {{calc.y}} {{calc.z}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "v 0.6666666666666666666666666667 1 1.000000000000000000000000002 1.000000000000000000000000002\n"
+  }
+ },
+ {
+  "id": "b-calc-28-digits-kept",
+  "rules": [
+   "CALC-PRECISION-28"
+  ],
+  "spec": "extended-markdown §8.1, §8.7",
+  "files": {
+   "main.md": "```calc\nx = 1 / 7\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "v 0.1428571428571428571428571429\n"
+  }
+ },
+ {
+  "id": "b-calc-div-zero-quantity",
+  "rules": [
+   "CALC-DIV-ZERO"
+  ],
+  "spec": "extended-markdown §8.1, §8.7",
+  "files": {
+   "main.md": "```calc\na = 5 km\nx = a / (2 - 2)\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 3
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-export-collision",
+  "rules": [
+   "CALC-EXPORT-COLLISION"
+  ],
+  "spec": "extended-markdown §8.1, §8.6",
+  "files": {
+   "main.md": "a\n\n```calc\nt = 1\n```\n\n```calc\nt = 2\n```\nv {{calc.t}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 8
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-distinct-exports",
+  "rules": [
+   "CALC-EXPORT-COLLISION"
+  ],
+  "spec": "extended-markdown §8.1, §8.6",
+  "files": {
+   "main.md": "a\n\n```calc\nt = 1\n```\n\n```calc\nu = 2\n```\nv {{calc.t}} {{calc.u}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "a\n\n\nv 1 2\n"
+  }
+ },
+ {
+  "id": "b-unit-unknown",
+  "rules": [
+   "UNIT-UNKNOWN-REJECT"
+  ],
+  "spec": "extended-markdown §8.2",
+  "files": {
+   "main.md": "```calc\nx = 5 furlongs\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-unit-unknown-target",
+  "rules": [
+   "UNIT-UNKNOWN-REJECT"
+  ],
+  "spec": "extended-markdown §8.2",
+  "files": {
+   "main.md": "```calc\nx = 5 km to foo\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-unit-incompatible-conversion",
+  "rules": [
+   "UNIT-INCOMPATIBLE-REJECT",
+   "CALC-TO-SAME-DIM"
+  ],
+  "spec": "extended-markdown §8.2, §8.7",
+  "files": {
+   "main.md": "```calc\nx = 5 km to kg\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-unit-bare-c",
+  "rules": [
+   "UNIT-BARE-C-F"
+  ],
+  "spec": "extended-markdown §8.2",
+  "files": {
+   "main.md": "```calc\nx = 5 C\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-unit-bare-f",
+  "rules": [
+   "UNIT-BARE-C-F"
+  ],
+  "spec": "extended-markdown §8.2",
+  "files": {
+   "main.md": "```calc\nx = 5 F\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-unit-to-bare-c",
+  "rules": [
+   "UNIT-BARE-C-F"
+  ],
+  "spec": "extended-markdown §8.2",
+  "files": {
+   "main.md": "```calc\nx = 20 degC to F\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-unit-degc-degf",
+  "rules": [
+   "UNIT-BARE-C-F"
+  ],
+  "spec": "extended-markdown §8.2",
+  "files": {
+   "main.md": "```calc\nx = 20 degC to degF\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "v 68 degF\n"
+  }
+ },
+ {
+  "id": "b-unit-metadata-cannot-redefine",
+  "rules": [
+   "UNIT-EXT-NO-ALTER"
+  ],
+  "spec": "extended-markdown §8.4",
+  "files": {
+   "main.md": "---\nunits:\n  km: 2 m\nvariables:\n  km: 7\n---\n```calc\nx = 1 km to m\ny = km\n```\nv {{calc.x}} {{calc.y}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "v 1000 m 7\n"
+  }
+ },
+ {
+  "id": "b-fx-no-observation",
+  "rules": [
+   "FX-NO-FETCH",
+   "FX-VALUATION-OR-ID",
+   "CALC-UNRESOLVED-FAILS"
+  ],
+  "spec": "extended-markdown §8.3, §8.8",
+  "files": {
+   "main.md": "```calc\nx = 100 EUR to USD\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_UNRESOLVED",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-fx-host-money-no-observation",
+  "rules": [
+   "FX-NO-FETCH",
+   "FX-HOST-SUPPLIES-OBSERVATIONS"
+  ],
+  "spec": "extended-markdown §8.3",
+  "files": {
+   "main.md": "---\nvariables:\n  apple_price: 150 USD\n---\n```calc\nshares = 10\nvalue_usd = apple_price * shares\nx = value_usd to EUR\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_UNRESOLVED",
+     "path": "main.md",
+     "line": 8
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-fx-same-currency-needs-no-observation",
+  "rules": [
+   "FX-HOST-SUPPLIES-OBSERVATIONS"
+  ],
+  "spec": "extended-markdown §8.3, §8.8",
+  "files": {
+   "main.md": "```calc\nx = 100 EUR to EUR\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "v 100 EUR\n"
+  }
+ },
+ {
+  "id": "b-calc-no-file-read",
+  "rules": [
+   "CALC-NO-FILE-READ"
+  ],
+  "spec": "extended-markdown §8.4",
+  "files": {
+   "main.md": "```calc\nx = read(\"f.txt\")\n```\nv {{calc.x}}\n",
+   "f.txt": "5\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-no-file-name",
+  "rules": [
+   "CALC-NO-FILE-READ"
+  ],
+  "spec": "extended-markdown §8.4",
+  "files": {
+   "main.md": "```calc\nx = f\n```\nv {{calc.x}}\n",
+   "f": "5\n",
+   "f.md": "5\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-no-clock",
+  "rules": [
+   "CALC-NO-CLOCK"
+  ],
+  "spec": "extended-markdown §8.4",
+  "files": {
+   "main.md": "```calc\nx = now\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-no-clock-call",
+  "rules": [
+   "CALC-NO-CLOCK"
+  ],
+  "spec": "extended-markdown §8.4",
+  "files": {
+   "main.md": "```calc\nx = today()\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-no-network-call",
+  "rules": [
+   "CALC-NO-NETWORK"
+  ],
+  "spec": "extended-markdown §8.3, §8.4",
+  "files": {
+   "main.md": "```calc\nx = fetch(\"https://example.invalid/rate\")\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-no-fx-function",
+  "rules": [
+   "CALC-NO-NETWORK",
+   "CALC-NO-EXTRA-CONSTRUCTS"
+  ],
+  "spec": "extended-markdown §8.3",
+  "files": {
+   "main.md": "```calc\nx = fx(EUR, USD)\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-empty-block",
+  "rules": [
+   "CALC-EMPTY-BLOCK"
+  ],
+  "spec": "extended-markdown §8.5",
+  "files": {
+   "main.md": "a\n\n```calc\n```\n\nb\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "a\n\n\nb\n"
+  }
+ },
+ {
+  "id": "b-calc-comment-only-block",
+  "rules": [
+   "CALC-EMPTY-BLOCK"
+  ],
+  "spec": "extended-markdown §8.5",
+  "files": {
+   "main.md": "a\n\n```calc\n# only a comment\n\n```\n\nb\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "a\n\n\nb\n"
+  }
+ },
+ {
+  "id": "b-calc-host-input",
+  "rules": [
+   "CALC-HOST-TYPED-INPUTS"
+  ],
+  "spec": "extended-markdown §8.6",
+  "files": {
+   "main.md": "```calc\nx = n * 2\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "options": {
+   "inputs": {
+    "n": 4
+   }
+  },
+  "expect": {
+   "output": "v 8\n"
+  }
+ },
+ {
+  "id": "b-calc-host-input-quantity",
+  "rules": [
+   "CALC-HOST-TYPED-INPUTS"
+  ],
+  "spec": "extended-markdown §8.6",
+  "files": {
+   "main.md": "```calc\nx = d to km\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "options": {
+   "inputs": {
+    "d": "12 miles"
+   }
+  },
+  "expect": {
+   "output": "v 19.312128 km\n"
+  }
+ },
+ {
+  "id": "b-calc-missing-host-input",
+  "rules": [
+   "CALC-HOST-TYPED-INPUTS"
+  ],
+  "spec": "extended-markdown §8.6",
+  "files": {
+   "main.md": "```calc\nx = n * 2\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-type-and-unit-kept",
+  "rules": [
+   "CALC-PRESERVE-TYPE-UNIT"
+  ],
+  "spec": "extended-markdown §8.6",
+  "files": {
+   "main.md": "```calc\na = 120 EUR\nb = 12 miles to km\nc = 5 km / 2 km\nd = 300 m + 5 km\n```\nv {{calc.a}}, {{calc.b}}, {{calc.c}}, {{calc.d}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "v 120 EUR, 19.312128 km, 2.5, 5300 m\n"
+  }
+ },
+ {
+  "id": "b-calc-unresolved-declared-input",
+  "rules": [
+   "CALC-UNRESOLVED-FAILS"
+  ],
+  "spec": "extended-markdown §8.6",
+  "files": {
+   "main.md": "---\nvariables:\n  price:\n    type: number\n---\n```calc\nx = price * 2\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_UNRESOLVED",
+     "path": "main.md"
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-undefined-result",
+  "rules": [
+   "CALC-UNRESOLVED-FAILS"
+  ],
+  "spec": "extended-markdown §8.6",
+  "files": {
+   "main.md": "a\n\nv {{calc.nope}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_UNDEFINED_VARIABLE",
+     "path": "main.md",
+     "line": 3
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-to-unrelated-dimension",
+  "rules": [
+   "CALC-TO-SAME-DIM"
+  ],
+  "spec": "extended-markdown §8.7",
+  "files": {
+   "main.md": "```calc\nx = (5 m * 3 m) to km\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-calc-to-same-dimension",
+  "rules": [
+   "CALC-TO-SAME-DIM"
+  ],
+  "spec": "extended-markdown §8.7",
+  "files": {
+   "main.md": "```calc\nx = (5 m * 3 m) to km2\ny = 90 km / 2 h to km/h\n```\nv {{calc.x}} {{calc.y}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "v 0.000015 km2 45 km/h\n"
+  }
+ },
+ {
+  "id": "b-unit-temp-multiply",
+  "rules": [
+   "UNIT-TEMP-NO-MULDIV",
+   "UNIT-TEMP-ILLEGAL-REJECT"
+  ],
+  "spec": "extended-markdown §8.2, §8.7",
+  "files": {
+   "main.md": "```calc\nx = 20 degC * 2\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-unit-temp-divide",
+  "rules": [
+   "UNIT-TEMP-NO-MULDIV"
+  ],
+  "spec": "extended-markdown §8.7",
+  "files": {
+   "main.md": "```calc\nx = 20 degF / 2\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-unit-temp-kelvin-scaled",
+  "rules": [
+   "UNIT-TEMP-NO-MULDIV"
+  ],
+  "spec": "extended-markdown §8.7",
+  "files": {
+   "main.md": "```calc\nx = 2 * 300 K\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-unit-temp-add",
+  "rules": [
+   "UNIT-TEMP-NO-ADD",
+   "UNIT-TEMP-ILLEGAL-REJECT"
+  ],
+  "spec": "extended-markdown §8.2, §8.7",
+  "files": {
+   "main.md": "```calc\nx = 20 degC + 5 degC\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-unit-temp-add-kelvin",
+  "rules": [
+   "UNIT-TEMP-NO-ADD"
+  ],
+  "spec": "extended-markdown §8.7",
+  "files": {
+   "main.md": "```calc\nx = 5 K + 5 K\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-unit-temp-compound-factor",
+  "rules": [
+   "UNIT-TEMP-NO-COMPOUND"
+  ],
+  "spec": "extended-markdown §8.7",
+  "files": {
+   "main.md": "```calc\nx = 5 degC * 2 kg\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-unit-temp-compound-ratio",
+  "rules": [
+   "UNIT-TEMP-NO-COMPOUND"
+  ],
+  "spec": "extended-markdown §8.7",
+  "files": {
+   "main.md": "```calc\nx = 5 K / 2 s\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-unit-temp-difference-deltak",
+  "rules": [
+   "UNIT-TEMP-DIFF-DELTAK"
+  ],
+  "spec": "extended-markdown §8.7",
+  "files": {
+   "main.md": "```calc\nx = 20 degC - 5 degC\ny = 68 degF - 32 degF\nz = 300 K - 5 degC\n```\nv {{calc.x}}, {{calc.y}}, {{calc.z}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "v 15 deltaK, 20 deltaK, 21.85 deltaK\n"
+  }
+ },
+ {
+  "id": "b-unit-temp-abs-plus-delta",
+  "rules": [
+   "UNIT-TEMP-DELTA-ABS-FAILS"
+  ],
+  "spec": "extended-markdown §8.7",
+  "files": {
+   "main.md": "```calc\nd = 20 degC - 5 degC\nx = 20 degC + d\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 3
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-unit-temp-abs-minus-delta",
+  "rules": [
+   "UNIT-TEMP-DELTA-ABS-FAILS"
+  ],
+  "spec": "extended-markdown §8.7",
+  "files": {
+   "main.md": "```calc\nd = 20 degC - 5 degC\nx = 20 degC - d\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 3
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-unit-temp-delta-plus-abs",
+  "rules": [
+   "UNIT-TEMP-DELTA-ABS-FAILS"
+  ],
+  "spec": "extended-markdown §8.7",
+  "files": {
+   "main.md": "```calc\nd = 20 degC - 5 degC\nx = d + 20 degC\n```\nv {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 3
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-diag-calc-error-in-import",
+  "rules": [
+   "DIAG-PATH-LOCATION"
+  ],
+  "spec": "extended-markdown §11",
+  "files": {
+   "main.md": "![[p.md]]\n",
+   "p.md": "text\n\n```calc\na = 1\nb = a / 0\n```\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "p.md",
+     "line": 5
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-diag-undefined-variable-located",
+  "rules": [
+   "DIAG-PATH-LOCATION"
+  ],
+  "spec": "extended-markdown §11",
+  "files": {
+   "main.md": "line one\n\nhello {{nope}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_UNDEFINED_VARIABLE",
+     "path": "main.md",
+     "line": 3
+    }
+   ]
+  }
+ },
+ {
+  "id": "b-diag-missing-import-located",
+  "rules": [
+   "DIAG-PATH-LOCATION"
+  ],
+  "spec": "extended-markdown §11",
+  "files": {
+   "main.md": "intro\n\n![[nope.md]]\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_MISSING_IMPORT",
+     "path": "main.md",
+     "line": 3
+    }
+   ]
+  }
+ }
+]

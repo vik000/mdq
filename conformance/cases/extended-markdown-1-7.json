@@ -1,0 +1,808 @@
+[
+ {
+  "id": "a-core-plain-md-unchanged",
+  "rules": [
+   "CORE-PLAIN-MD-VALID",
+   "CORE-COMMONMARK-SEMANTICS"
+  ],
+  "spec": "extended-markdown §1",
+  "files": {
+   "main.md": "# Title\n\nSome *text*, `code` and [a link](x.md \"t\").\n\n> quote\n\n- a\n- b\n\n1. one\n\n    indented\n\n***\n\n<div>raw</div>\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "# Title\n\nSome *text*, `code` and [a link](x.md \"t\").\n\n> quote\n\n- a\n- b\n\n1. one\n\n    indented\n\n***\n\n<div>raw</div>\n"
+  }
+ },
+ {
+  "id": "a-core-gfm-constructs-kept",
+  "rules": [
+   "CORE-COMMONMARK-SEMANTICS"
+  ],
+  "spec": "extended-markdown §1, §7",
+  "files": {
+   "main.md": "| a | b |\n| - | - |\n| 1 | 2 |\n\n- [x] done\n- [ ] todo\n\n~~gone~~ https://example.com\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "| a | b |\n| - | - |\n| 1 | 2 |\n\n- [x] done\n- [ ] todo\n\n~~gone~~ https://example.com\n"
+  }
+ },
+ {
+  "id": "a-core-build-strips-block-ids",
+  "rules": [
+   "CORE-BUILD-NO-UNRESOLVED-DIRECTIVES"
+  ],
+  "spec": "extended-markdown §1, §3",
+  "files": {
+   "main.md": "# Title ^top\n\nPara ^p1\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "# Title\n\nPara\n"
+  }
+ },
+ {
+  "id": "a-core-build-wiki-link-not-left-literal",
+  "rules": [
+   "CORE-BUILD-NO-UNRESOLVED-DIRECTIVES",
+   "COMP-REF-LINK-REWRITE"
+  ],
+  "spec": "extended-markdown §1, §3",
+  "files": {
+   "main.md": "![[b.md]]\n\nSee [[b.md#X|the X]].\n",
+   "b.md": "# X\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "# X\n\nSee [the X](#x).\n"
+  },
+  "xfail": "BUG-1: wiki/reference links [[x]] stay literal in compile output (a recorded E8.1 choice) but spec §1/§3 require rewriting or MDQ_UNRESOLVED_REFERENCE"
+ },
+ {
+  "id": "a-core-unknown-feature-fails",
+  "rules": [
+   "CORE-UNSUPPORTED-FEATURE-FAILS"
+  ],
+  "spec": "extended-markdown §1",
+  "files": {
+   "main.md": "---\nfeatures: [core, rich, bogus]\n---\nx\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_UNSUPPORTED_FEATURE"
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-core-unknown-required-container-fails",
+  "rules": [
+   "CORE-UNSUPPORTED-FEATURE-FAILS"
+  ],
+  "spec": "extended-markdown §1, §7",
+  "files": {
+   "main.md": ":::vendor.thing {a=\"b\"}\nbody\n:::\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_UNSUPPORTED_FEATURE",
+     "path": "main.md",
+     "line": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-core-all-profiles-accepted",
+  "rules": [
+   "CORE-PUBLISH-PROFILES"
+  ],
+  "spec": "extended-markdown §1",
+  "files": {
+   "main.md": "---\nmdq: '0.1'\nfeatures: [core, rich, calc, package]\n---\nx\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "x\n"
+  }
+ },
+ {
+  "id": "a-lex-fenced-code-literal",
+  "rules": [
+   "LEX-NO-DIRECTIVE-IN-FENCED-CODE"
+  ],
+  "spec": "extended-markdown §2",
+  "files": {
+   "main.md": "---\nvariables:\n  x: X\n---\na\n\n```\n{{x}} ![[nope.md]]\n```\n\nb {{x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "a\n\n```\n{{x}} ![[nope.md]]\n```\n\nb X\n"
+  }
+ },
+ {
+  "id": "a-lex-indented-code-literal",
+  "rules": [
+   "LEX-NO-DIRECTIVE-IN-INDENTED-CODE"
+  ],
+  "spec": "extended-markdown §2",
+  "files": {
+   "main.md": "---\nvariables:\n  x: X\n---\na\n\n    {{x}}\n    ![[nope.md]]\n\nb {{x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "a\n\n    {{x}}\n    ![[nope.md]]\n\nb X\n"
+  }
+ },
+ {
+  "id": "a-lex-inline-code-literal",
+  "rules": [
+   "LEX-NO-DIRECTIVE-IN-INLINE-CODE"
+  ],
+  "spec": "extended-markdown §2",
+  "files": {
+   "main.md": "---\nvariables:\n  x: X\n---\na `{{x}}` and `![[nope.md]]` b {{x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "a `{{x}}` and `![[nope.md]]` b X\n"
+  }
+ },
+ {
+  "id": "a-lex-html-block-literal",
+  "rules": [
+   "LEX-NO-DIRECTIVE-IN-HTML-BLOCK"
+  ],
+  "spec": "extended-markdown §2",
+  "files": {
+   "main.md": "---\nvariables:\n  x: X\n---\n<div>\n{{x}} ![[nope.md]]\n</div>\n\nb {{x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "<div>\n{{x}} ![[nope.md]]\n</div>\n\nb X\n"
+  }
+ },
+ {
+  "id": "a-lex-escaped-directive-literal",
+  "rules": [
+   "LEX-NO-DIRECTIVE-ESCAPED"
+  ],
+  "spec": "extended-markdown §2",
+  "files": {
+   "main.md": "---\nvariables:\n  x: X\n---\na \\{{x}} b {{x}}\n\n\\![[nope.md]]\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "a \\{{x}} b X\n\n\\![[nope.md]]\n"
+  }
+ },
+ {
+  "id": "a-lex-code-span-structure-first",
+  "rules": [
+   "LEX-PARSE-BEFORE-EXPAND"
+  ],
+  "spec": "extended-markdown §2",
+  "files": {
+   "main.md": "---\nvariables:\n  x: X\n---\na `{{x` b }}` c {{x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "a `{{x` b }}` c X\n"
+  }
+ },
+ {
+  "id": "a-lex-path-traversal-denied",
+  "rules": [
+   "LEX-PATH-NO-ROOT-ESCAPE"
+  ],
+  "spec": "extended-markdown §2",
+  "files": {
+   "sub/main.md": "![[../../b.md]]\n",
+   "b.md": "x\n"
+  },
+  "entry": "sub/main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SECURITY_DENIED",
+     "path": "sub/main.md",
+     "line": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-comp-block-id-duplicate-root",
+  "rules": [
+   "COMP-BLOCK-ID-UNIQUE"
+  ],
+  "spec": "extended-markdown §3",
+  "files": {
+   "main.md": "a ^p1\n\nb ^p1\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_DUPLICATE_ID",
+     "path": "main.md",
+     "line": 3
+    }
+   ]
+  },
+  "xfail": "BUG-2: compile strips block-ID markers without checking duplicates (only #^id embeds check them); spec §3 requires unique IDs"
+ },
+ {
+  "id": "a-comp-block-id-duplicate-target",
+  "rules": [
+   "COMP-BLOCK-ID-UNIQUE"
+  ],
+  "spec": "extended-markdown §3",
+  "files": {
+   "main.md": "![[b.md#^p1]]\n",
+   "b.md": "a ^p1\n\nb ^p1\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_DUPLICATE_ID",
+     "path": "b.md",
+     "line": 3
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-comp-ref-no-global-filename-search",
+  "rules": [
+   "COMP-REF-EXPLICIT-RELATIVE-PATH"
+  ],
+  "spec": "extended-markdown §3",
+  "files": {
+   "sub/a.md": "![[b.md]]\n",
+   "b.md": "x\n"
+  },
+  "entry": "sub/a.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_MISSING_IMPORT",
+     "path": "sub/a.md",
+     "line": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-comp-import-cycle-two-files",
+  "rules": [
+   "COMP-IMPORT-CYCLE"
+  ],
+  "spec": "extended-markdown §3",
+  "files": {
+   "main.md": "![[b.md]]\n",
+   "b.md": "![[main.md]]\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_IMPORT_CYCLE",
+     "path": "b.md",
+     "line": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-comp-import-cycle-section",
+  "rules": [
+   "COMP-IMPORT-CYCLE-SECTION"
+  ],
+  "spec": "extended-markdown §3",
+  "files": {
+   "main.md": "![[b.md#S]]\n",
+   "b.md": "# S\n\n![[main.md]]\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_IMPORT_CYCLE",
+     "path": "b.md",
+     "line": 3
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-comp-ref-link-unresolved-heading-fails",
+  "rules": [
+   "COMP-REF-LINK-FALLBACK-OR-FAIL",
+   "ANCH-ABSENT-TARGET-NO-BROKEN-ANCHOR"
+  ],
+  "spec": "extended-markdown §3, §3.1",
+  "files": {
+   "main.md": "See [[b.md#Nope]].\n",
+   "b.md": "# H\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_UNRESOLVED_REFERENCE",
+     "path": "main.md",
+     "line": 1
+    }
+   ]
+  },
+  "xfail": "BUG-1: wiki/reference links [[x]] stay literal; a link to a missing heading must fail (spec §3.1)"
+ },
+ {
+  "id": "a-anch-combined-duplicate-headings",
+  "rules": [
+   "ANCH-COMBINED-DUPLICATE-DISAMBIGUATE",
+   "ANCH-GENERATED-COLLISION-RENAME"
+  ],
+  "spec": "extended-markdown §3, §3.1",
+  "files": {
+   "main.md": "# A\n\n![[b.md]]\n\n[[toc]]\n",
+   "b.md": "# A\n\n## A\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "# A\n\n# A\n\n## A\n\n- [A](#a)\n- [A](#a-2)\n  - [A](#a-3)\n"
+  }
+ },
+ {
+  "id": "a-anch-portable-slug",
+  "rules": [
+   "ANCH-PORTABLE-SLUG-ALGORITHM"
+  ],
+  "spec": "extended-markdown §3.1",
+  "files": {
+   "main.md": "# Ünïcode & Straße!\n\n# ***\n\n[[toc]]\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "# Ünïcode & Straße!\n\n# ***\n\n- [Ünïcode \\& Straße!](#%C3%BCn%C3%AFcode-strasse)\n- [\\*\\*\\*](#section)\n"
+  }
+ },
+ {
+  "id": "a-anch-block-id-reserves-its-anchor",
+  "rules": [
+   "ANCH-BLOCK-ID-PRIORITY"
+  ],
+  "spec": "extended-markdown §3.1",
+  "files": {
+   "main.md": "Para ^a\n\n# A\n\n[[toc]]\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "Para\n\n# A\n\n- [A](#a-2)\n"
+  },
+  "xfail": "BUG-3: generated heading anchors ignore user block IDs, so a TOC anchor can equal a block ID; spec §3.1 gives the block ID priority"
+ },
+ {
+  "id": "a-anch-import-asset-rebased",
+  "rules": [
+   "ANCH-EXPORT-REWRITE-DESTINATIONS"
+  ],
+  "spec": "extended-markdown §3.1",
+  "files": {
+   "index.md": "![[chapters/intro.md]]\n",
+   "chapters/intro.md": "![Diagram](images/flow.png) [ext](https://example.com/a.png)\n"
+  },
+  "entry": "index.md",
+  "expect": {
+   "output": "![Diagram](chapters/images/flow.png) [ext](https://example.com/a.png)\n"
+  }
+ },
+ {
+  "id": "a-var-mapping-not-interpolated",
+  "rules": [
+   "VAR-NO-COLLECTION-INTERPOLATION"
+  ],
+  "spec": "extended-markdown §4",
+  "files": {
+   "main.md": "---\nvariables:\n  o:\n    a: 1\n---\nv {{o}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_UNSUPPORTED_FEATURE",
+     "path": "main.md",
+     "line": 6
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-var-list-not-interpolated",
+  "rules": [
+   "VAR-NO-COLLECTION-INTERPOLATION"
+  ],
+  "spec": "extended-markdown §4",
+  "files": {
+   "main.md": "---\nvariables:\n  o: [1, 2]\n---\nv {{o}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_UNSUPPORTED_FEATURE",
+     "path": "main.md",
+     "line": 5
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-var-metacharacters-escaped",
+  "rules": [
+   "VAR-ESCAPE-METACHARACTERS",
+   "VAR-NO-RAW-INSERTION"
+  ],
+  "spec": "extended-markdown §4",
+  "files": {
+   "main.md": "---\nvariables:\n  x: '*a* _b_ [c](d) <e> `f`'\n---\nv {{x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "v \\*a\\* \\_b\\_ \\[c\\](d) \\<e> \\`f\\`\n"
+  }
+ },
+ {
+  "id": "a-var-directive-in-value-not-expanded",
+  "rules": [
+   "VAR-NO-RAW-INSERTION"
+  ],
+  "spec": "extended-markdown §4",
+  "files": {
+   "main.md": "---\nvariables:\n  x: '{{y}} ![[b.md]]'\n  y: Y\n---\nv {{x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "v \\{\\{y}} !\\[\\[b.md\\]\\]\n"
+  }
+ },
+ {
+  "id": "a-meta-frontmatter-sequence-rejected",
+  "rules": [
+   "META-FRONTMATTER-MAPPING"
+  ],
+  "spec": "extended-markdown §5",
+  "files": {
+   "main.md": "---\n- a\n- b\n---\nx\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_METADATA_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-meta-frontmatter-scalar-rejected",
+  "rules": [
+   "META-FRONTMATTER-MAPPING"
+  ],
+  "spec": "extended-markdown §5",
+  "files": {
+   "main.md": "---\nhello\n---\nx\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_METADATA_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-meta-duplicate-key-frontmatter",
+  "rules": [
+   "META-DUPLICATE-KEYS"
+  ],
+  "spec": "extended-markdown §5",
+  "files": {
+   "main.md": "---\ntitle: A\ntitle: B\n---\nx\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_METADATA_ERROR",
+     "path": "main.md",
+     "line": 3
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-meta-duplicate-key-sidecar",
+  "rules": [
+   "META-DUPLICATE-KEYS"
+  ],
+  "spec": "extended-markdown §5",
+  "files": {
+   "main.md": "x\n",
+   "main.meta.yaml": "t: 1\nt: 2\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_METADATA_ERROR",
+     "path": "main.meta.yaml",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-meta-duplicate-key-directory",
+  "rules": [
+   "META-DUPLICATE-KEYS"
+  ],
+  "spec": "extended-markdown §5",
+  "files": {
+   "main.md": "x\n",
+   ".mdq.yaml": "t: 1\nt: 2\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_METADATA_ERROR",
+     "path": ".mdq.yaml",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-meta-reserved-namespace-document",
+  "rules": [
+   "META-RESERVED-NAMESPACE-CONFLICT"
+  ],
+  "spec": "extended-markdown §5",
+  "files": {
+   "main.md": "---\nvariables:\n  document: 1\n---\nx\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_METADATA_ERROR"
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-meta-reserved-namespace-calc",
+  "rules": [
+   "META-RESERVED-NAMESPACE-CONFLICT"
+  ],
+  "spec": "extended-markdown §5",
+  "files": {
+   "main.md": "---\nvariables:\n  calc: 1\n---\nx\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_METADATA_ERROR"
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-cond-nested-same-delimiter-rejected",
+  "rules": [
+   "COND-NESTED-LONGER-DELIMITER"
+  ],
+  "spec": "extended-markdown §6",
+  "files": {
+   "main.md": ":::if {var=\"a\" equals=\"1\"}\n:::if {var=\"a\" equals=\"1\"}\nx\n:::\n:::\n"
+  },
+  "entry": "main.md",
+  "options": {
+   "inputs": {
+    "a": 1
+   }
+  },
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_INVALID_SYNTAX",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-cond-nested-shorter-delimiter-rejected",
+  "rules": [
+   "COND-NESTED-LONGER-DELIMITER"
+  ],
+  "spec": "extended-markdown §6",
+  "files": {
+   "main.md": "::::if {var=\"a\" equals=\"1\"}\n:::if {var=\"a\" equals=\"1\"}\nx\n:::\n::::\n"
+  },
+  "entry": "main.md",
+  "options": {
+   "inputs": {
+    "a": 1
+   }
+  },
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_INVALID_SYNTAX",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-cond-nested-longer-delimiter-ok",
+  "rules": [
+   "COND-NESTED-LONGER-DELIMITER"
+  ],
+  "spec": "extended-markdown §6",
+  "files": {
+   "main.md": ":::if {var=\"a\" equals=\"1\"}\n::::if {var=\"a\" equals=\"1\"}\nx\n::::\n:::\n"
+  },
+  "entry": "main.md",
+  "options": {
+   "inputs": {
+    "a": 1
+   }
+  },
+  "expect": {
+   "output": "x\n"
+  }
+ },
+ {
+  "id": "a-cond-excluded-branch-missing-import",
+  "rules": [
+   "COND-EXCLUDED-NO-IMPORT-READ"
+  ],
+  "spec": "extended-markdown §6",
+  "files": {
+   "main.md": ":::if {var=\"a\" equals=\"1\"}\n![[missing.md]]\n:::\n\nok\n"
+  },
+  "entry": "main.md",
+  "options": {
+   "inputs": {
+    "a": 2
+   }
+  },
+  "expect": {
+   "output": "\nok\n"
+  }
+ },
+ {
+  "id": "a-cond-excluded-branch-bad-section",
+  "rules": [
+   "COND-EXCLUDED-NO-IMPORT-READ"
+  ],
+  "spec": "extended-markdown §6",
+  "files": {
+   "main.md": ":::if {var=\"a\" equals=\"1\"}\n![[b.md#Nope]]\n:::\n\nok\n",
+   "b.md": "# H\n"
+  },
+  "entry": "main.md",
+  "options": {
+   "inputs": {
+    "a": 2
+   }
+  },
+  "expect": {
+   "output": "\nok\n"
+  }
+ },
+ {
+  "id": "a-cond-included-branch-reads-import",
+  "rules": [
+   "COND-EXCLUDED-NO-IMPORT-READ"
+  ],
+  "spec": "extended-markdown §6",
+  "files": {
+   "main.md": ":::if {var=\"a\" equals=\"1\"}\n![[missing.md]]\n:::\n\nok\n"
+  },
+  "entry": "main.md",
+  "options": {
+   "inputs": {
+    "a": 1
+   }
+  },
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_MISSING_IMPORT",
+     "path": "main.md"
+    }
+   ]
+  }
+ },
+ {
+  "id": "a-rich-footnotes-scoped-on-import",
+  "rules": [
+   "RICH-FOOTNOTE-SCOPED-RENAME"
+  ],
+  "spec": "extended-markdown §7",
+  "files": {
+   "main.md": "Root[^1]\n\n[^1]: root note\n\n![[b.md]]\n",
+   "b.md": "Child[^1]\n\n[^1]: child note\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "Root[^1]\n\n[^1]: root note\n\nChild[^b_2emd--1]\n\n[^b_2emd--1]: child note\n"
+  }
+ },
+ {
+  "id": "a-rich-math-not-executed",
+  "rules": [
+   "RICH-MATH-NO-EXECUTE",
+   "RICH-MATH-COMMONMARK-FALLBACK"
+  ],
+  "spec": "extended-markdown §7",
+  "files": {
+   "main.md": "A $\\input{/etc/passwd}$ and $\\write18{rm -rf /}$\n\n$$\n\\immediate\\write18{ls}\n$$\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "A `\\input{/etc/passwd}` and `\\write18{rm -rf /}`\n\n```math\n\\immediate\\write18{ls}\n```\n"
+  }
+ },
+ {
+  "id": "a-rich-math-gfm-keeps-notation",
+  "rules": [
+   "RICH-MATH-NO-EXECUTE"
+  ],
+  "spec": "extended-markdown §7",
+  "files": {
+   "main.md": "A $\\input{/etc/passwd}$\n"
+  },
+  "entry": "main.md",
+  "options": {
+   "profile": "gfm"
+  },
+  "expect": {
+   "output": "A $\\input{/etc/passwd}$\n"
+  }
+ },
+ {
+  "id": "a-rich-citation-portable-fallback",
+  "rules": [
+   "RICH-CITATION-PORTABLE-FALLBACK"
+  ],
+  "spec": "extended-markdown §7",
+  "files": {
+   "main.md": "---\nbibliography: refs.bib\n---\nSee [@knuth84, p. 12].\n",
+   "refs.bib": "@book{knuth84,\n author = {Knuth, Donald},\n title = {The TeXbook},\n year = {1984},\n publisher = {Addison-Wesley}\n}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "See (Knuth 1984, p. 12).\n\n## References\n\n- Knuth, Donald (1984). The TeXbook. Addison-Wesley.\n"
+  }
+ }
+]

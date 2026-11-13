@@ -1,0 +1,810 @@
+[
+ {
+  "id": "c-ucat-degf-to-degc-single-rounding",
+  "rules": [
+   "UCAT-NO-INTERMEDIATE-ROUNDING"
+  ],
+  "spec": "calculation-units §2",
+  "files": {
+   "main.md": "```calc\nx = 72 degF to degC\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "Value: 22.22222222222222222222222222 degC\n"
+  }
+ },
+ {
+  "id": "c-ucat-psi-to-pa-single-rounding",
+  "rules": [
+   "UCAT-NO-INTERMEDIATE-ROUNDING"
+  ],
+  "spec": "calculation-units §2",
+  "files": {
+   "main.md": "```calc\nx = 1 psi to Pa\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "Value: 6894.757293168361336722673445 Pa\n"
+  }
+ },
+ {
+  "id": "c-ucat-kmh-to-ms-single-rounding",
+  "rules": [
+   "UCAT-NO-INTERMEDIATE-ROUNDING"
+  ],
+  "spec": "calculation-units §2",
+  "files": {
+   "main.md": "```calc\nx = 1 km/h to m/s\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "Value: 0.2777777777777777777777777778 m/s\n"
+  }
+ },
+ {
+  "id": "c-ucat-unknown-unit-mile",
+  "rules": [
+   "UCAT-UNKNOWN-TOKENS-REJECTED"
+  ],
+  "spec": "calculation-units §3",
+  "files": {
+   "main.md": "```calc\nx = 1 mile\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-ucat-unknown-unit-miles-upper",
+  "rules": [
+   "UCAT-UNKNOWN-TOKENS-REJECTED"
+  ],
+  "spec": "calculation-units §3",
+  "files": {
+   "main.md": "```calc\nx = 1 Miles\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-ucat-unknown-unit-km-upper",
+  "rules": [
+   "UCAT-UNKNOWN-TOKENS-REJECTED"
+  ],
+  "spec": "calculation-units §3",
+  "files": {
+   "main.md": "```calc\nx = 1 KM\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-ucat-unknown-unit-kg-upper",
+  "rules": [
+   "UCAT-UNKNOWN-TOKENS-REJECTED"
+  ],
+  "spec": "calculation-units §3",
+  "files": {
+   "main.md": "```calc\nx = 1 Kg\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-ucat-unknown-unit-l",
+  "rules": [
+   "UCAT-UNKNOWN-TOKENS-REJECTED"
+  ],
+  "spec": "calculation-units §3",
+  "files": {
+   "main.md": "```calc\nx = 1 l\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-ucat-unknown-unit-kb-upper",
+  "rules": [
+   "UCAT-UNKNOWN-TOKENS-REJECTED"
+  ],
+  "spec": "calculation-units §3",
+  "files": {
+   "main.md": "```calc\nx = 1 KB\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-ucat-unknown-unit-mb",
+  "rules": [
+   "UCAT-UNKNOWN-TOKENS-REJECTED"
+  ],
+  "spec": "calculation-units §3",
+  "files": {
+   "main.md": "```calc\nx = 1 mb\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-ucat-unknown-unit-sec",
+  "rules": [
+   "UCAT-UNKNOWN-TOKENS-REJECTED"
+  ],
+  "spec": "calculation-units §3",
+  "files": {
+   "main.md": "```calc\nx = 1 sec\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-ucat-unknown-unit-hr",
+  "rules": [
+   "UCAT-UNKNOWN-TOKENS-REJECTED"
+  ],
+  "spec": "calculation-units §3",
+  "files": {
+   "main.md": "```calc\nx = 1 hr\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-ucat-unknown-unit-metre",
+  "rules": [
+   "UCAT-UNKNOWN-TOKENS-REJECTED"
+  ],
+  "spec": "calculation-units §3",
+  "files": {
+   "main.md": "```calc\nx = 1 metre\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-ucat-unknown-unit-after-to",
+  "rules": [
+   "UCAT-UNKNOWN-TOKENS-REJECTED"
+  ],
+  "spec": "calculation-units §3",
+  "files": {
+   "main.md": "```calc\nx = 1 km to KM\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-ucat-unit-word-outside-unit-position",
+  "rules": [
+   "UCAT-UNIT-POSITION-ONLY"
+  ],
+  "spec": "calculation-units §3",
+  "files": {
+   "main.md": "```calc\nC = 3\nkm = 2\nx = C + km\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "Value: 5\n"
+  }
+ },
+ {
+  "id": "c-ucat-unit-after-number-and-after-to",
+  "rules": [
+   "UCAT-UNIT-POSITION-ONLY"
+  ],
+  "spec": "calculation-units §3",
+  "files": {
+   "main.md": "```calc\nx = 12 miles to km\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "Value: 19.312128 km\n"
+  }
+ },
+ {
+  "id": "c-ucat-deltak-after-number-rejected",
+  "rules": [
+   "UCAT-DELTAK-RESULT-ONLY"
+  ],
+  "spec": "calculation-units §3",
+  "files": {
+   "main.md": "```calc\nx = 1 deltaK\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-ucat-deltak-after-to-rejected",
+  "rules": [
+   "UCAT-DELTAK-RESULT-ONLY"
+  ],
+  "spec": "calculation-units §3",
+  "files": {
+   "main.md": "```calc\nx = (30 degC - 10 degC) to deltaK\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-ucat-deltak-as-result",
+  "rules": [
+   "UCAT-DELTAK-RESULT-ONLY"
+  ],
+  "spec": "calculation-units §3",
+  "files": {
+   "main.md": "```calc\nx = 30 degC - 10 degC\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "Value: 20 deltaK\n"
+  }
+ },
+ {
+  "id": "c-ucat-c-is-not-celsius",
+  "rules": [
+   "UCAT-NO-C-F-TEMPERATURE"
+  ],
+  "spec": "calculation-units §7",
+  "files": {
+   "main.md": "```calc\nx = 5 C\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-ucat-f-is-not-fahrenheit",
+  "rules": [
+   "UCAT-NO-C-F-TEMPERATURE"
+  ],
+  "spec": "calculation-units §7",
+  "files": {
+   "main.md": "```calc\nx = 5 degC to F\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_CALC_ERROR",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-inline-source-without-snapshot-is-unresolved",
+  "rules": [
+   "SRC-REPORT-UNSUPPORTED",
+   "SRC-RESOLVER-NOT-ON-OPEN",
+   "SRC-OFFLINE-SNAPSHOTS",
+   "SRC-CONF-INLINE-FRONTMATTER"
+  ],
+  "spec": "sources-and-permissions §1-3, 6",
+  "files": {
+   "main.md": "---\nvariables:\n  price:\n    type: number\n    unit: USD\n    source:\n      kind: http\n      format: json\n      url: https://example.invalid/stocks/AAPL\n      select: /price\n---\nPrice is {{price}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_UNRESOLVED",
+     "path": "main.md"
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-inline-source-unused-still-unresolved",
+  "rules": [
+   "SRC-REPORT-UNSUPPORTED"
+  ],
+  "spec": "sources-and-permissions §5",
+  "files": {
+   "main.md": "---\nvariables:\n  price:\n    type: number\n    unit: USD\n    source:\n      kind: http\n      format: json\n      url: https://example.invalid/stocks/AAPL\n      select: /price\n---\nNo use of the price\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_UNRESOLVED",
+     "path": "main.md"
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-named-inherited-project-source-is-unresolved",
+  "rules": [
+   "SRC-CONF-NAMED-INHERITED"
+  ],
+  "spec": "sources-and-permissions §1, 6",
+  "files": {
+   ".mdq.yaml": "sources:\n  prices:\n    kind: http\n    url: https://example.invalid/prices/{symbol}\n    method: GET\n    format: json\n    select: /price\nvariables:\n  apple_price:\n    type: number\n    unit: USD\n    source: prices\n    arguments: {symbol: AAPL}\nrequirements:\n  network: optional\n",
+   "main.md": "Apple is {{apple_price}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_UNRESOLVED",
+     "path": ".mdq.yaml"
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-named-source-used-from-frontmatter",
+  "rules": [
+   "SRC-CONF-NAMED-INHERITED"
+  ],
+  "spec": "sources-and-permissions §2, 6",
+  "files": {
+   ".mdq.yaml": "sources:\n  prices:\n    kind: http\n    url: https://example.invalid/prices/{symbol}\n    method: GET\n    format: json\n    select: /price\n",
+   "main.md": "---\nvariables:\n  p:\n    type: number\n    source: prices\n    arguments: {symbol: MSFT}\n---\nP is {{p}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_UNRESOLVED",
+     "path": "main.md"
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-named-source-unknown-reference",
+  "rules": [
+   "SRC-CORE-VALIDATE",
+   "SRC-CONF-NAMED-INHERITED"
+  ],
+  "spec": "sources-and-permissions §2",
+  "files": {
+   ".mdq.yaml": "sources:\n  prices:\n    kind: http\n    url: https://example.invalid/prices/{symbol}\n    method: GET\n    format: json\n    select: /price\n",
+   "main.md": "---\nvariables:\n  p:\n    type: number\n    source: nope\n---\nP is {{p}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_INVALID",
+     "path": "main.md"
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-named-source-unknown-argument",
+  "rules": [
+   "SRC-CORE-VALIDATE"
+  ],
+  "spec": "sources-and-permissions §2",
+  "files": {
+   ".mdq.yaml": "sources:\n  prices:\n    kind: http\n    url: https://example.invalid/prices/{symbol}\n    method: GET\n    format: json\n    select: /price\n",
+   "main.md": "---\nvariables:\n  p:\n    type: number\n    source: prices\n    arguments: {sym: A}\n---\nP is {{p}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_INVALID",
+     "path": "main.md"
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-document-override-of-project-variable",
+  "rules": [
+   "SRC-CONF-DOCUMENT-OVERRIDE"
+  ],
+  "spec": "sources-and-permissions §1, 6",
+  "files": {
+   ".mdq.yaml": "sources:\n  prices:\n    kind: http\n    url: https://example.invalid/prices/{symbol}\n    method: GET\n    format: json\n    select: /price\nvariables:\n  apple_price:\n    type: number\n    unit: USD\n    source: prices\n    arguments: {symbol: AAPL}\nrequirements:\n  network: optional\n",
+   "main.md": "---\nvariables:\n  apple_price: 7 USD\n---\nApple is {{apple_price}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "output": "Apple is 7 USD\n"
+  }
+ },
+ {
+  "id": "c-src-invalid-json-pointer",
+  "rules": [
+   "SRC-CORE-VALIDATE",
+   "SRC-CONF-OFFLINE-VALIDATION",
+   "SRC-CONF-INVALID-POINTER"
+  ],
+  "spec": "sources-and-permissions §2, 6",
+  "files": {
+   "main.md": "---\nvariables:\n  price:\n    type: number\n    unit: USD\n    source:\n      kind: http\n      format: json\n      url: https://example.invalid/p\n      select: price\n---\nPrice is {{price}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_INVALID",
+     "path": "main.md"
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-unsupported-scheme-http",
+  "rules": [
+   "SRC-CONF-UNSUPPORTED-SCHEME"
+  ],
+  "spec": "sources-and-permissions §2, 4, 6",
+  "files": {
+   "main.md": "---\nvariables:\n  price:\n    type: number\n    unit: USD\n    source:\n      kind: http\n      format: json\n      url: http://example.invalid/p\n      select: /price\n---\nPrice is {{price}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_INVALID",
+     "path": "main.md"
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-unsupported-scheme-file",
+  "rules": [
+   "SRC-CONF-UNSUPPORTED-SCHEME"
+  ],
+  "spec": "sources-and-permissions §4, 6",
+  "files": {
+   "main.md": "---\nvariables:\n  price:\n    type: number\n    unit: USD\n    source:\n      kind: http\n      format: json\n      url: file:///etc/passwd\n      select: /price\n---\nPrice is {{price}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_INVALID",
+     "path": "main.md"
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-non-get-method",
+  "rules": [
+   "SRC-CORE-VALIDATE"
+  ],
+  "spec": "sources-and-permissions §2",
+  "files": {
+   "main.md": "---\nvariables:\n  price:\n    type: number\n    unit: USD\n    source:\n      kind: http\n      format: json\n      url: https://example.invalid/p\n      method: POST\n---\nPrice is {{price}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_INVALID",
+     "path": "main.md"
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-unknown-kind-fails",
+  "rules": [
+   "SRC-REPORT-UNSUPPORTED"
+  ],
+  "spec": "sources-and-permissions §2",
+  "files": {
+   "main.md": "---\nvariables:\n  price:\n    type: number\n    unit: USD\n    source:\n      kind: ftp\n      url: https://example.invalid/p\n      format: json\n---\nPrice is {{price}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_INVALID",
+     "path": "main.md"
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-credentials-in-url",
+  "rules": [
+   "SRC-NO-CREDENTIALS"
+  ],
+  "spec": "sources-and-permissions §2, 4",
+  "files": {
+   "main.md": "---\nvariables:\n  price:\n    type: number\n    unit: USD\n    source:\n      kind: http\n      format: json\n      url: https://user:pw@example.invalid/p\n      select: /price\n---\nPrice is {{price}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_INVALID",
+     "path": "main.md"
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-credential-key",
+  "rules": [
+   "SRC-NO-CREDENTIALS"
+  ],
+  "spec": "sources-and-permissions §2",
+  "files": {
+   "main.md": "---\nvariables:\n  price:\n    type: number\n    unit: USD\n    source:\n      kind: http\n      format: json\n      url: https://example.invalid/p\n      select: /price\n      token: abc\n---\nPrice is {{price}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_INVALID",
+     "path": "main.md"
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-bad-declared-type",
+  "rules": [
+   "SRC-CORE-VALIDATE",
+   "SRC-CONF-BAD-TYPE"
+  ],
+  "spec": "sources-and-permissions §2",
+  "files": {
+   "main.md": "---\nvariables:\n  q:\n    type: money\n---\nQ is {{q}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_INVALID",
+     "path": "main.md"
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-host-value-type-mismatch",
+  "rules": [
+   "SRC-TYPE-CHECK-BEFORE-INJECTION",
+   "SRC-CONF-BAD-TYPE"
+  ],
+  "spec": "sources-and-permissions §2, 6",
+  "files": {
+   "main.md": "---\nvariables:\n  q:\n    type: number\n---\nQ is {{q}}\n"
+  },
+  "entry": "main.md",
+  "options": {
+   "inputs": {
+    "q": "abc"
+   }
+  },
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_TYPE_ERROR",
+     "path": "main.md"
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-host-value-bool-for-number",
+  "rules": [
+   "SRC-TYPE-CHECK-BEFORE-INJECTION"
+  ],
+  "spec": "sources-and-permissions §2",
+  "files": {
+   "main.md": "---\nvariables:\n  q:\n    type: number\n---\nQ is {{q}}\n"
+  },
+  "entry": "main.md",
+  "options": {
+   "inputs": {
+    "q": true
+   }
+  },
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_TYPE_ERROR",
+     "path": "main.md"
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-host-value-accepted",
+  "rules": [
+   "SRC-CORE-ACCEPT-RESOLVED",
+   "SRC-INJECTION-INTERFACE"
+  ],
+  "spec": "sources-and-permissions §2-3",
+  "files": {
+   "main.md": "---\nvariables:\n  q:\n    type: number\n---\nQ is {{q}}\n"
+  },
+  "entry": "main.md",
+  "options": {
+   "inputs": {
+    "q": 3
+   }
+  },
+  "expect": {
+   "output": "Q is 3\n"
+  }
+ },
+ {
+  "id": "c-src-host-value-missing",
+  "rules": [
+   "SRC-REPORT-UNSUPPORTED"
+  ],
+  "spec": "sources-and-permissions §1-3",
+  "files": {
+   "main.md": "---\nvariables:\n  q:\n    type: number\n---\nQ is {{q}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_UNRESOLVED",
+     "path": "main.md"
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-input-cannot-replace-source-variable",
+  "rules": [
+   "SRC-OFFLINE-SNAPSHOTS"
+  ],
+  "spec": "sources-and-permissions §5",
+  "files": {
+   "main.md": "---\nvariables:\n  price:\n    type: number\n    unit: USD\n    source:\n      kind: http\n      format: json\n      url: https://example.invalid/stocks/AAPL\n      select: /price\n---\nPrice is {{price}}\n"
+  },
+  "entry": "main.md",
+  "options": {
+   "inputs": {
+    "price": 3
+   }
+  },
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_INVALID"
+    }
+   ]
+  }
+ },
+ {
+  "id": "c-src-missing-valuation-rate",
+  "rules": [
+   "SRC-CONF-MISSING-VALUATION-RATE",
+   "SRC-NO-STALE-SUBSTITUTE"
+  ],
+  "spec": "sources-and-permissions §5-6",
+  "files": {
+   "main.md": "```calc\nx = 100 EUR to USD\n```\nValue: {{calc.x}}\n"
+  },
+  "entry": "main.md",
+  "expect": {
+   "diagnostics": [
+    {
+     "code": "MDQ_SOURCE_UNRESOLVED",
+     "path": "main.md",
+     "line": 2
+    }
+   ]
+  }
+ }
+]

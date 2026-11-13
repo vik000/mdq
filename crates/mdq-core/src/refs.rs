@@ -132,22 +132,7 @@ pub(crate) fn build(text: &str, first_line: u32) -> Res<Index> {
             bid = Some(id);
         }
         if heading {
-            let level = if atx {
-                let line = &c[starts[a]..ends[a]];
-                let p = line.iter().position(|&x| x == '#').unwrap_or(0);
-                line[p..].iter().take_while(|&&x| x == '#').count()
-            } else {
-                let line = &c[starts[b - 1]..ends[b - 1]];
-                let mut e = line.len();
-                while e > 0 && (line[e - 1] == ' ' || line[e - 1] == '\t') {
-                    e -= 1;
-                }
-                if e > 0 && line[e - 1] == '=' {
-                    1
-                } else {
-                    2
-                }
-            };
+            let level = heading_level(&c, &starts, &ends, a, b);
             let joined: Vec<String> = texts.iter().map(|t| t.iter().collect()).collect();
             let text = heading_plain_text(&joined.join("\n"), false)?;
             headings.push(Heading {
@@ -222,5 +207,25 @@ pub(crate) fn resolve_in(ix: &Index, fragment: &str) -> Res<Resolved> {
     match ix.headings.iter().find(|h| h.text == key) {
         Some(h) => Ok(as_heading(h)),
         None => Err(Diagnostic::new(Code::UnresolvedReference, format!("no heading matches {:?}", fragment))),
+    }
+}
+
+/// Level (1-6) of the heading leaf spanning lines `a..b`: the `#` count (ATX) or `=`/`-` underline (setext).
+pub(crate) fn heading_level(c: &[char], starts: &[usize], ends: &[usize], a: usize, b: usize) -> usize {
+    if b - a == 1 {
+        let line = &c[starts[a]..ends[a]];
+        let p = line.iter().position(|&x| x == '#').unwrap_or(0);
+        line[p..].iter().take_while(|&&x| x == '#').count()
+    } else {
+        let line = &c[starts[b - 1]..ends[b - 1]];
+        let mut e = line.len();
+        while e > 0 && (line[e - 1] == ' ' || line[e - 1] == '\t') {
+            e -= 1;
+        }
+        if e > 0 && line[e - 1] == '=' {
+            1
+        } else {
+            2
+        }
     }
 }

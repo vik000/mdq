@@ -16,6 +16,7 @@ pub mod links;
 pub mod meta;
 pub mod paths;
 pub mod refs;
+pub mod rich;
 pub mod unitab;
 pub mod units;
 pub mod utf8;

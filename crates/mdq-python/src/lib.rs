@@ -14,6 +14,7 @@ use mdq_core::headings;
 use mdq_core::imports;
 use mdq_core::links;
 use mdq_core::refs;
+use mdq_core::rich;
 use mdq_core::meta;
 use mdq_core::paths;
 use mdq_core::diag::{Code, Diagnostic};
@@ -703,6 +704,30 @@ fn rebase_links(py: Python<'_>, text: &str, from_dir: &str, to_dir: &str, first_
     wrap(py, links::rebase_links(text, from_dir, to_dir, first_line))
 }
 
+#[pyfunction]
+#[pyo3(signature = (text, first_line=1))]
+fn highlight_fallback(py: Python<'_>, text: &str, first_line: u32) -> PyResult<String> {
+    wrap(py, rich::highlight_fallback(text, first_line))
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, first_line=1))]
+fn callout_fallback(py: Python<'_>, text: &str, first_line: u32) -> PyResult<String> {
+    wrap(py, rich::callout_fallback(text, first_line))
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, first_line=1))]
+fn details_fallback(py: Python<'_>, text: &str, first_line: u32) -> PyResult<String> {
+    wrap(py, rich::details_fallback(text, first_line))
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, first_line=1))]
+fn columns_fallback(py: Python<'_>, text: &str, first_line: u32) -> PyResult<String> {
+    wrap(py, rich::columns_fallback(text, first_line))
+}
+
 fn attrs_dict<'py>(py: Python<'py>, attrs: Vec<(String, String)>) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
     for (k, v) in attrs {
@@ -906,6 +931,10 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(import_expand, &internal)?)?;
     internal.add_function(wrap_pyfunction!(rebase_link, &internal)?)?;
     internal.add_function(wrap_pyfunction!(rebase_links, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(highlight_fallback, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(callout_fallback, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(details_fallback, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(columns_fallback, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_canonical, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_combine, &internal)?)?;
     m.add_submodule(&internal)?;

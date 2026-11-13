@@ -218,6 +218,7 @@ struct Delim {
     can_open: bool,
     can_close: bool,
     alive: bool,
+    pos: usize,
 }
 
 struct Brk {
@@ -239,7 +240,7 @@ fn next_alive(delims: &[Delim], k: usize) -> Option<usize> {
     }
 }
 
-fn process(delims: &mut [Delim], bottom: usize) {
+fn process(delims: &mut [Delim], bottom: usize, marks: &mut Vec<(usize, usize)>) {
     let mut excl: HashMap<(char, bool, usize), isize> = HashMap::new();
     let mut k = next_alive(delims, bottom);
     while let Some(ki) = k {
@@ -277,6 +278,9 @@ fn process(delims: &mut [Delim], bottom: usize) {
                 } else {
                     1
                 };
+                if dch == '=' {
+                    marks.push((delims[fi].pos, delims[ki].pos));
+                }
                 delims[fi].count -= used;
                 delims[ki].count -= used;
                 for m in fi + 1..ki {
@@ -310,6 +314,11 @@ fn flush(buf: &mut String, segs: &mut Vec<Seg>) {
 /// The text a CommonMark renderer shows for inline Markdown `s` (before NFC and white space
 /// normalisation).
 fn strip_inline(s: &str) -> String {
+    strip_inline_marks(s, &mut Vec::new())
+}
+
+/// Like `strip_inline`; also records the char positions of each matched `==` pair.
+pub(crate) fn strip_inline_marks(s: &str, marks: &mut Vec<(usize, usize)>) -> String {
     let c: Vec<char> = s.chars().collect();
     let n = c.len();
     let mut segs: Vec<Seg> = Vec::new();
@@ -430,7 +439,7 @@ fn strip_inline(s: &str) -> String {
                 (left, right)
             };
             flush(&mut buf, &mut segs);
-            delims.push(Delim { ch, orig: run, count: run, can_open: co, can_close: cc, alive: true });
+            delims.push(Delim { ch, orig: run, count: run, can_open: co, can_close: cc, alive: true, pos: i });
             segs.push(Seg::D(delims.len() - 1));
             i = j;
         } else if ch == '[' || (ch == '!' && i + 1 < n && c[i + 1] == '[') {
@@ -466,7 +475,7 @@ fn strip_inline(s: &str) -> String {
             };
             flush(&mut buf, &mut segs);
             let top = brks[b].top;
-            process(&mut delims, top);
+            process(&mut delims, top, marks);
             for m in top..delims.len() {
                 delims[m].alive = false;
             }
@@ -486,7 +495,7 @@ fn strip_inline(s: &str) -> String {
         }
     }
     flush(&mut buf, &mut segs);
-    process(&mut delims, 0);
+    process(&mut delims, 0, marks);
     let mut out = String::new();
     for seg in &segs {
         match seg {

@@ -89,3 +89,9 @@ import_expand = _i.import_expand
 # E4.5 link rebasing
 rebase_link = _i.rebase_link
 rebase_links = _i.rebase_links
+
+# E5.1 rich-feature fallbacks
+highlight_fallback = _i.highlight_fallback
+callout_fallback = _i.callout_fallback
+details_fallback = _i.details_fallback
+columns_fallback = _i.columns_fallback

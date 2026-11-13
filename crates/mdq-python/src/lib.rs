@@ -11,6 +11,7 @@ use mdq_core::calc::render;
 use mdq_core::frontmatter;
 use mdq_core::fx;
 use mdq_core::meta;
+use mdq_core::paths;
 use mdq_core::diag::{Code, Diagnostic};
 use mdq_core::units;
 use mdq_core::utf8;
@@ -537,6 +538,21 @@ fn container_eval(
     wrap(py, containers::container_eval(text, &y, first_line, max_iterations))
 }
 
+#[pyfunction]
+fn path_normalise(py: Python<'_>, base: &str, rel: &str) -> PyResult<String> {
+    wrap(py, paths::path_normalise(base, rel))
+}
+
+#[pyfunction]
+fn path_identity(path: &str) -> String {
+    paths::path_identity(path)
+}
+
+#[pyfunction]
+fn path_confine(py: Python<'_>, root: &str, rel: &str) -> PyResult<String> {
+    wrap(py, paths::path_confine(root, rel))
+}
+
 fn attrs_dict<'py>(py: Python<'py>, attrs: Vec<(String, String)>) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
     for (k, v) in attrs {
@@ -727,6 +743,9 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(attrs_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_eval, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(path_normalise, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(path_identity, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(path_confine, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_canonical, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_combine, &internal)?)?;
     m.add_submodule(&internal)?;

@@ -8,3 +8,4 @@ description = "MDQ core: pure Rust logic, no Python or network dependencies"
 [dependencies]
 num-bigint = "0.4"
 num-traits = "0.2"
+unicode-normalization = "0.1"

@@ -10,6 +10,7 @@ pub mod dim;
 pub mod frontmatter;
 pub mod fx;
 pub mod meta;
+pub mod paths;
 pub mod units;
 pub mod utf8;
 pub mod vars;

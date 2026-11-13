@@ -66,3 +66,8 @@ utf8_decode = _i.utf8_decode
 attrs_parse = _i.attrs_parse
 container_parse = _i.container_parse
 container_eval = _i.container_eval
+
+# E4.1 import paths
+path_normalise = _i.path_normalise
+path_identity = _i.path_identity
+path_confine = _i.path_confine

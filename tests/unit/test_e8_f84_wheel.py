@@ -8,9 +8,14 @@ The full run is the L8 release check (slow on a cold build) and is opt-in:
     MDQ_WHEEL_SMOKE=1 MDQ_WHEEL_PYTHONS=/path/python3.9:/path/python3.13 pytest ...   # more interpreters
 
 Interpreters whose architecture differs from the wheel are reported as SKIP by the script, not as failures.
+The sdist (cross-cutting fix, G55): it must carry every file the Rust core embeds with include_str!, at the
+same relative path; the fast test checks that, the opt-in run also builds and tests a wheel from the sdist.
 """
 import importlib.util
 import os
+import re
+import shutil
+import tarfile
 import subprocess
 import sys
 from pathlib import Path
@@ -49,3 +54,42 @@ def test_wheel_smoke():
     print(r.stdout)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "ok    " + sys.executable in r.stdout
+
+
+def embedded_files():
+    """Every file the Rust sources embed (include_str!/include_bytes!), as repo-relative paths."""
+    out = set()
+    for rs in (ROOT / "crates").rglob("*.rs"):
+        for rel in re.findall(r'include_(?:str|bytes)!\("([^"]+)"\)', rs.read_text()):
+            out.add((rs.parent / rel).resolve().relative_to(ROOT).as_posix())
+    return out
+
+
+def test_embedded_files_exist():
+    files = embedded_files()
+    assert "spec/units.tsv" in files
+    assert all((ROOT / f).is_file() for f in files)
+
+
+def test_sdist_contains_every_embedded_file(tmp_path):
+    if importlib.util.find_spec("maturin") is None and shutil.which("maturin") is None:
+        pytest.skip("maturin is not installed")
+    r = subprocess.run([sys.executable, "-m", "maturin", "sdist", "--out", str(tmp_path)], capture_output=True,
+                       text=True, cwd=ROOT, timeout=600)
+    assert r.returncode == 0, r.stdout + r.stderr
+    (sdist,) = tmp_path.glob("mdq-*.tar.gz")
+    with tarfile.open(sdist) as t:
+        names = {n.split("/", 1)[1] for n in t.getnames() if "/" in n}
+    missing = embedded_files() - names
+    assert not missing, f"embedded files missing from the sdist: {missing}"
+    for f in ("pyproject.toml", "Cargo.toml", "Cargo.lock", "python/mdq/cli.schema.json", "python/mdq/py.typed"):
+        assert f in names, f
+
+
+@pytest.mark.skipif(os.environ.get("MDQ_WHEEL_SMOKE") != "1", reason="release check: set MDQ_WHEEL_SMOKE=1 to build the wheel from the sdist")
+def test_wheel_from_sdist_smoke():
+    r = subprocess.run([sys.executable, str(SCRIPT), "--sdist", sys.executable], capture_output=True, text=True,
+                       cwd=ROOT, timeout=1800)
+    print(r.stdout)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "from the sdist" in r.stdout and "ok    " + sys.executable in r.stdout

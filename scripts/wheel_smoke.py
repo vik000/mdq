@@ -1,6 +1,9 @@
 """Wheel smoke test (E8.4, G55): build the wheel, install it into a clean venv per Python, use it.
 
-    python scripts/wheel_smoke.py [PYTHON ...]      # default: the running interpreter
+    python scripts/wheel_smoke.py [--sdist] [PYTHON ...]      # default: the running interpreter
+
+`--sdist`: build the source distribution, unpack it, build the wheel FROM it (proves the sdist is complete,
+e.g. carries `spec/units.tsv`, which the core embeds from outside its crate), then test that wheel.
 
 For each interpreter: create a fresh venv, install the wheel with `--no-index` (no network, no source tree),
 then, from a temporary directory outside the repository:
@@ -96,6 +99,29 @@ def build_wheel(out: Path) -> Path:
     return wheels[0]
 
 
+def build_from_sdist(out: Path) -> Path:
+    import tarfile
+    sd = out / "sdist"
+    run([sys.executable, "-m", "maturin", "sdist", "--out", sd], cwd=ROOT)
+    tars = list(sd.glob("mdq-*.tar.gz"))
+    if len(tars) != 1:
+        raise RuntimeError(f"expected one sdist, found {tars}")
+    with tarfile.open(tars[0]) as t:
+        names = t.getnames()
+        if not any(n.endswith("/spec/units.tsv") for n in names):
+            raise RuntimeError("the sdist does not contain spec/units.tsv")
+        if sys.version_info >= (3, 12):
+            t.extractall(sd, filter="data")
+        else:
+            t.extractall(sd)
+    src = next(p for p in sd.iterdir() if p.is_dir())
+    run([sys.executable, "-m", "pip", "wheel", "--quiet", "--no-deps", "--no-build-isolation", "-w", out, "."], cwd=src)
+    wheels = list(out.glob("mdq-*.whl"))
+    if len(wheels) != 1:
+        raise RuntimeError(f"expected one wheel built from the sdist, found {wheels}")
+    return wheels[0]
+
+
 def smoke(python: str, wheel: Path, version: str, tmp: Path) -> None:
     env_dir = tmp / f"venv-{Path(python).name}"
     run([python, "-m", "venv", env_dir])
@@ -124,13 +150,18 @@ def smoke(python: str, wheel: Path, version: str, tmp: Path) -> None:
 
 
 def main(argv: list) -> int:
-    pythons = argv or [sys.executable]
+    from_sdist = "--sdist" in argv
+    pythons = [a for a in argv if a != "--sdist"] or [sys.executable]
     version = workspace_version()
     failures = 0
     with tempfile.TemporaryDirectory(prefix="mdq-wheel-") as t:
         tmp = Path(t)
-        wheel = build_wheel(tmp / "dist")
-        print(f"built {wheel.name}")
+        if from_sdist:
+            wheel = build_from_sdist(tmp / "dist")
+            print(f"built {wheel.name} from the sdist")
+        else:
+            wheel = build_wheel(tmp / "dist")
+            print(f"built {wheel.name}")
         wheel_arch = "arm64" if "arm64" in wheel.name or "aarch64" in wheel.name else (
             "x86_64" if "x86_64" in wheel.name else None)
         tested = 0

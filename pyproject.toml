@@ -20,6 +20,9 @@ manifest-path = "crates/mdq-python/Cargo.toml"
 python-source = "python"
 module-name = "mdq._native"
 features = ["pyo3/extension-module"]
+# The unit catalogue is compiled into the core with include_str!("../../../spec/units.tsv"); it lives in
+# spec/ (normative, single copy), outside the crate, so the sdist must carry it at the same path.
+include = [{ path = "spec/units.tsv", format = "sdist" }]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

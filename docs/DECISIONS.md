@@ -22,6 +22,14 @@ Per feature. Veto by editing or telling me. Test-plan gap rows (G-numbers) in `d
 **Open**
 - Per-member encryption layout (spec gap 4): strict xfail `test_per_member_encryption_layout`.
 
+## Cross-cutting: sdist fix (G55)
+**Decisions**
+- The sdist carries `spec/units.tsv` through `[tool.maturin] include` (format sdist), at the same relative path, so `include_str!("../../../spec/units.tsv")` resolves when building from the sdist. The normative file in `spec/` stays the single copy (no duplicate in the crate to keep in sync).
+- Guard: a fast test lists every `include_str!`/`include_bytes!` in `crates/` and checks the built sdist contains each; verified to fail when the include line is removed. The opt-in run also builds a wheel from the unpacked sdist and smoke-tests it.
+
+**Sacrifices**
+- `mdq-core` alone still cannot be packaged for crates.io (`cargo package`), since the file is outside the crate; not a goal for 0.1.
+
 ## E8.4 wheel smoke test (G55)
 **Decisions**
 - A standalone script (`scripts/wheel_smoke.py`) does the work, so CI can run it directly; the pytest test wraps it and is opt-in (`MDQ_WHEEL_SMOKE=1`), because a cold release build takes minutes. The cheap checks (version equals the Cargo workspace version, packaged files exist, console script declared) always run.

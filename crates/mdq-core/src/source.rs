@@ -1,7 +1,9 @@
 //! Source declarations and URL templates (sources-and-permissions.md section 2; G42 in
 //! docs/TEST_PLAN.md). Offline only: no I/O, no host or IP checks (E6.3, E6.4).
 
+use crate::decimal;
 use crate::diag::{Code, Diagnostic};
+use crate::json::{self, Json};
 use crate::yaml::{self, Yaml};
 use std::collections::HashMap;
 
@@ -427,4 +429,230 @@ pub fn source_validate(text: &str, first_line: u32) -> Res<Vec<Declared>> {
         Some(_) => return Err(bad("variables must be a mapping")),
     }
     Ok(out)
+}
+
+// ---- E6.2: JSON Pointer selection and type checks (G43) ----
+
+fn unresolved(msg: String) -> Diagnostic {
+    Diagnostic::new(Code::SourceUnresolved, msg)
+}
+
+fn type_err(msg: impl Into<String>) -> Diagnostic {
+    Diagnostic::new(Code::SourceTypeError, msg.into())
+}
+
+fn kind_of(v: &Json) -> &'static str {
+    match v {
+        Json::Null => "null",
+        Json::Bool(_) => "a boolean",
+        Json::Num(_) => "a number",
+        Json::Str(_) => "a string",
+        Json::Arr(_) => "an array",
+        Json::Obj(_) => "an object",
+    }
+}
+
+/// Parse strict JSON and follow an RFC 6901 pointer. Errors never echo document values.
+pub fn json_pointer_select(text: &str, pointer: &str) -> Res<Json> {
+    if let Some(m) = pointer_syntax(pointer) {
+        return Err(bad(format!("JSON Pointer: {m}")));
+    }
+    let root = json::parse(text, "source JSON")?;
+    let mut cur = &root;
+    let mut done = String::new();
+    if !pointer.is_empty() {
+        for raw in pointer[1..].split('/') {
+            let tok = raw.replace("~1", "/").replace("~0", "~");
+            let here = format!("{done}/{}", tok.replace('~', "~0").replace('/', "~1"));
+            let fail = |why: &str| unresolved(format!("JSON Pointer {pointer}: {why} at {here}"));
+            cur = match cur {
+                Json::Obj(m) => match m.iter().find(|(k, _)| *k == tok) {
+                    Some((_, v)) => v,
+                    None => return Err(fail("no member")),
+                },
+                Json::Arr(a) => {
+                    if tok == "-" {
+                        return Err(fail("'-' refers to the element after the last"));
+                    }
+                    let digits = !tok.is_empty() && tok.bytes().all(|b| b.is_ascii_digit());
+                    if !digits || (tok.len() > 1 && tok.starts_with('0')) {
+                        return Err(fail("array index must be digits without leading zeros"));
+                    }
+                    match tok.parse::<usize>().ok().and_then(|i| a.get(i)) {
+                        Some(v) => v,
+                        None => return Err(fail("array index out of range")),
+                    }
+                }
+                other => return Err(fail(&format!("cannot select inside {}", kind_of(other)))),
+            };
+            done = here;
+        }
+    }
+    Ok(cur.clone())
+}
+
+/// Canonical decimal text of a JSON-grammar number (exponents expanded, exact, no rounding).
+fn num_canonical(s: &str) -> Res<String> {
+    let out = || type_err("number out of range");
+    let b = s.as_bytes();
+    let mut i = 0;
+    if b.first() == Some(&b'-') {
+        i += 1;
+    }
+    match b.get(i) {
+        Some(b'0') => i += 1,
+        Some(c) if c.is_ascii_digit() => {
+            while b.get(i).is_some_and(|c| c.is_ascii_digit()) {
+                i += 1;
+            }
+        }
+        _ => return Err(type_err("not a finite decimal number")),
+    }
+    if b.get(i) == Some(&b'.') {
+        i += 1;
+        let st = i;
+        while b.get(i).is_some_and(|c| c.is_ascii_digit()) {
+            i += 1;
+        }
+        if i == st {
+            return Err(type_err("not a finite decimal number"));
+        }
+    }
+    let mant_end = i;
+    if matches!(b.get(i), Some(b'e') | Some(b'E')) {
+        i += 1;
+        if matches!(b.get(i), Some(b'+') | Some(b'-')) {
+            i += 1;
+        }
+        let st = i;
+        while b.get(i).is_some_and(|c| c.is_ascii_digit()) {
+            i += 1;
+        }
+        if i == st {
+            return Err(type_err("not a finite decimal number"));
+        }
+    }
+    if i != b.len() {
+        return Err(type_err("not a finite decimal number"));
+    }
+    let exp: i64 = if mant_end < s.len() { s[mant_end + 1..].parse::<i64>().map_err(|_| out())? } else { 0 };
+    let mant = &s[..mant_end];
+    let neg = mant.starts_with('-');
+    let mant = mant.trim_start_matches('-');
+    let (ip, fp) = mant.split_once('.').unwrap_or((mant, ""));
+    let digits = format!("{ip}{fp}");
+    if digits.bytes().all(|c| c == b'0') {
+        return Ok("0".to_string());
+    }
+    let point = (ip.len() as i64).saturating_add(exp);
+    if point.abs() > 20000 || digits.len() > 10000 {
+        return Err(out());
+    }
+    let plain = if point <= 0 {
+        format!("0.{}{}", "0".repeat((-point) as usize), digits)
+    } else if point as usize >= digits.len() {
+        format!("{}{}", digits, "0".repeat(point as usize - digits.len()))
+    } else {
+        format!("{}.{}", &digits[..point as usize], &digits[point as usize..])
+    };
+    let signed = if neg { format!("-{plain}") } else { plain };
+    decimal::canonical(&signed).map_err(|_| out())
+}
+
+fn date_ok(s: &str) -> bool {
+    let b = s.as_bytes();
+    if b.len() != 10 || b[4] != b'-' || b[7] != b'-' {
+        return false;
+    }
+    if !b.iter().enumerate().all(|(k, c)| k == 4 || k == 7 || c.is_ascii_digit()) {
+        return false;
+    }
+    let y: u32 = s[0..4].parse().unwrap_or(0);
+    let m: u32 = s[5..7].parse().unwrap_or(0);
+    let d: u32 = s[8..10].parse().unwrap_or(0);
+    if y < 1 || !(1..=12).contains(&m) {
+        return false;
+    }
+    let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
+    let days = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][(m - 1) as usize];
+    (1..=days).contains(&d)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Typed {
+    /// Canonical decimal text.
+    Num(String),
+    Str(String),
+    Bool(bool),
+    /// ISO `YYYY-MM-DD`.
+    Date(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Checked {
+    pub vtype: String,
+    pub value: Typed,
+    pub unit: Option<String>,
+}
+
+/// Check a selected JSON value (strictly, no coercion) or, with `from_text`, a text body (a `Json::Str`)
+/// against a declared type.
+pub fn value_type_check(v: &Json, ty: &str, unit: Option<&str>, from_text: bool) -> Res<Checked> {
+    if let Some(u) = unit {
+        if ty != "number" {
+            return Err(bad("unit is only allowed for type number"));
+        }
+        if u.trim().is_empty() {
+            return Err(bad("unit must be a non-empty string"));
+        }
+    }
+    let value = if from_text {
+        let Json::Str(t) = v else {
+            return Err(bad("a text body must be a string"));
+        };
+        if ty == "string" {
+            let o = t.strip_suffix("\r\n").or_else(|| t.strip_suffix('\n')).unwrap_or(t);
+            Typed::Str(o.to_string())
+        } else {
+            let t = t.trim_matches(|c| matches!(c, ' ' | '\t' | '\r' | '\n'));
+            match ty {
+                "number" => Typed::Num(num_canonical(t)?),
+                "boolean" => match t {
+                    "true" => Typed::Bool(true),
+                    "false" => Typed::Bool(false),
+                    _ => return Err(type_err("expected a boolean (true or false)")),
+                },
+                "date" => {
+                    if !date_ok(t) {
+                        return Err(type_err("expected a date (YYYY-MM-DD)"));
+                    }
+                    Typed::Date(t.to_string())
+                }
+                _ => return Err(bad("unknown type")),
+            }
+        }
+    } else {
+        let want = match ty {
+            "number" => "a number",
+            "boolean" => "a boolean",
+            "string" | "date" => "a string",
+            _ => return Err(bad("unknown type")),
+        };
+        if kind_of(v) != want {
+            return Err(type_err(format!("expected {ty}, got {}", kind_of(v))));
+        }
+        match (ty, v) {
+            ("number", Json::Num(n)) => Typed::Num(num_canonical(n)?),
+            ("boolean", Json::Bool(b)) => Typed::Bool(*b),
+            ("date", Json::Str(t)) => {
+                if !date_ok(t) {
+                    return Err(type_err("expected a date (YYYY-MM-DD)"));
+                }
+                Typed::Date(t.clone())
+            }
+            (_, Json::Str(t)) => Typed::Str(t.clone()),
+            _ => return Err(bad("unknown type")),
+        }
+    };
+    Ok(Checked { vtype: ty.to_string(), value, unit: unit.map(|u| u.to_string()) })
 }

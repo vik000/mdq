@@ -875,6 +875,83 @@ fn url_template_expand(py: Python<'_>, template: &str, arguments: &Bound<'_, PyD
     wrap(py, source::url_template_expand(template, &args))
 }
 
+fn json_to_py<'py>(py: Python<'py>, v: &mdq_core::json::Json, dec: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    use mdq_core::json::Json;
+    match v {
+        Json::Null => Ok(py.None().into_bound(py)),
+        Json::Bool(b) => Ok(PyBool::new(py, *b).to_owned().into_any()),
+        Json::Num(n) => dec.call1((n.as_str(),)),
+        Json::Str(s) => Ok(PyString::new(py, s).into_any()),
+        Json::Arr(items) => {
+            let list = PyList::empty(py);
+            for item in items {
+                list.append(json_to_py(py, item, dec)?)?;
+            }
+            Ok(list.into_any())
+        }
+        Json::Obj(entries) => {
+            let d = PyDict::new(py);
+            for (k, item) in entries {
+                d.set_item(k.as_str(), json_to_py(py, item, dec)?)?;
+            }
+            Ok(d.into_any())
+        }
+    }
+}
+
+#[pyfunction]
+fn json_pointer_select<'py>(py: Python<'py>, text: &str, pointer: &str) -> PyResult<Bound<'py, PyAny>> {
+    let v = wrap(py, source::json_pointer_select(text, pointer))?;
+    let dec = py.import("decimal")?.getattr("Decimal")?;
+    json_to_py(py, &v, &dec)
+}
+
+#[pyfunction]
+#[pyo3(signature = (value, r#type, unit=None, from_text=false))]
+fn value_type_check<'py>(
+    py: Python<'py>,
+    value: &Bound<'py, PyAny>,
+    r#type: &str,
+    unit: Option<&str>,
+    from_text: bool,
+) -> PyResult<Bound<'py, PyDict>> {
+    use mdq_core::json::Json;
+    if !matches!(r#type, "number" | "string" | "boolean" | "date") {
+        return Err(PyValueError::new_err("type must be 'number', 'string', 'boolean' or 'date'"));
+    }
+    let dec = py.import("decimal")?.getattr("Decimal")?;
+    let j = if value.is_none() {
+        Json::Null
+    } else if value.downcast::<PyBool>().is_ok() {
+        Json::Bool(value.is_truthy()?)
+    } else if value.downcast::<PyInt>().is_ok() || value.is_instance(&dec)? {
+        Json::Num(value.str()?.to_string())
+    } else if let Ok(s) = value.downcast::<PyString>() {
+        Json::Str(s.to_string())
+    } else if value.downcast::<PyList>().is_ok() {
+        Json::Arr(Vec::new())
+    } else if value.downcast::<PyDict>().is_ok() {
+        Json::Obj(Vec::new())
+    } else if value.downcast::<pyo3::types::PyFloat>().is_ok() {
+        return Err(PyTypeError::new_err("float is not accepted; use decimal.Decimal"));
+    } else {
+        return Err(PyTypeError::new_err("unsupported value type"));
+    };
+    if from_text && !matches!(j, Json::Str(_)) {
+        return Err(PyTypeError::new_err("value must be str when from_text is true"));
+    }
+    let c = wrap(py, source::value_type_check(&j, r#type, unit, from_text))?;
+    let d = PyDict::new(py);
+    d.set_item("type", c.vtype)?;
+    match c.value {
+        source::Typed::Num(n) => d.set_item("value", dec.call1((n.as_str(),))?)?,
+        source::Typed::Str(s) | source::Typed::Date(s) => d.set_item("value", s)?,
+        source::Typed::Bool(b) => d.set_item("value", b)?,
+    }
+    d.set_item("unit", c.unit)?;
+    Ok(d)
+}
+
 fn attrs_dict<'py>(py: Python<'py>, attrs: Vec<(String, String)>) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
     for (k, v) in attrs {
@@ -1066,6 +1143,8 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(export_markdown, &internal)?)?;
     internal.add_function(wrap_pyfunction!(source_validate, &internal)?)?;
     internal.add_function(wrap_pyfunction!(url_template_expand, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(json_pointer_select, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(value_type_check, &internal)?)?;
     internal.add_function(wrap_pyfunction!(attrs_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_eval, &internal)?)?;

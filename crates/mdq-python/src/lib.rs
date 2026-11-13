@@ -501,6 +501,42 @@ fn interpolate(py: Python<'_>, text: &str, variables: &Bound<'_, PyAny>, first_l
     wrap(py, vars::interpolate(text, &y, first_line))
 }
 
+#[pyfunction]
+fn md_regions<'py>(py: Python<'py>, text: &str) -> PyResult<Vec<Bound<'py, PyDict>>> {
+    let leaves = wrap(py, mdq_core::blocks::regions(text))?;
+    let mut out = Vec::with_capacity(leaves.len());
+    for leaf in leaves {
+        let d = PyDict::new(py);
+        d.set_item("kind", leaf.kind.as_str())?;
+        d.set_item("start_line", leaf.first_line)?;
+        d.set_item("end_line", leaf.end_line)?;
+        let mut segs = Vec::with_capacity(leaf.segments.len());
+        for (a, b) in leaf.segments {
+            segs.push(PyTuple::new(py, [a, b])?);
+        }
+        d.set_item("segments", segs)?;
+        out.push(d);
+    }
+    Ok(out)
+}
+
+#[pyfunction]
+#[pyo3(signature = (text, first_line=1))]
+fn directive_scan<'py>(py: Python<'py>, text: &str, first_line: u32) -> PyResult<Vec<Bound<'py, PyDict>>> {
+    let found = wrap(py, vars::directives(text, first_line))?;
+    let mut out = Vec::with_capacity(found.len());
+    for dir in found {
+        let d = PyDict::new(py);
+        d.set_item("start", dir.start)?;
+        d.set_item("end", dir.end)?;
+        d.set_item("name", dir.name)?;
+        d.set_item("line", dir.line)?;
+        d.set_item("column", dir.column)?;
+        out.push(d);
+    }
+    Ok(out)
+}
+
 // ---- render test hook (E1.7) ----
 
 /// `calc_render(result)`: display text of a result dict (`type`, `value`,
@@ -624,6 +660,8 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(var_format_scalar, &internal)?)?;
     internal.add_function(wrap_pyfunction!(md_escape_inline, &internal)?)?;
     internal.add_function(wrap_pyfunction!(interpolate, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(md_regions, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(directive_scan, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_canonical, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_combine, &internal)?)?;
     m.add_submodule(&internal)?;

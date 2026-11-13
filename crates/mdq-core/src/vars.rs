@@ -166,6 +166,15 @@ fn www_before(c: &[char], i: usize) -> bool {
     w == "www"
 }
 
+/// A `#` that starts a run of `#` reaching the end of its line right after a space or tab: in an
+/// ATX heading it would become the optional closing sequence and vanish from the text.
+fn closing_hash(c: &[char], i: usize) -> bool {
+    if i == 0 || (c[i - 1] != ' ' && c[i - 1] != '\t') {
+        return false;
+    }
+    c[i..].iter().take_while(|&&x| x != '\n' && x != '\r').all(|&x| x == '#')
+}
+
 /// Escape `s` so that, written into inline Markdown, it renders as the same
 /// text. `at_line_start` says whether the value starts where a block marker
 /// could start (line start, or after `> `, `- `, `1. `, `# `); the rules for
@@ -226,7 +235,8 @@ pub fn escape_inline(s: &str, at_line_start: bool) -> Res<String> {
         let is_list_num = digits_ok && ndigits >= 1 && ndigits <= 9;
         let esc = match ch {
             '\\' | '`' | '*' | '_' | '~' | '[' | ']' | '<' | '|' | '{' | '$' | '&' | '@' => true,
-            '#' | '+' | '-' | '>' => ls,
+            '#' => ls || closing_hash(&c, i),
+            '+' | '-' | '>' => ls,
             '=' => ls || prev_eq || next_eq,
             ':' => ls || (i + 2 < n && c[i + 1] == '/' && c[i + 2] == '/'),
             '.' => is_list_num || www_before(&c, i),
@@ -297,7 +307,7 @@ fn block_start_prefix(p: &str) -> bool {
 
 // ---------------------------------------------------------------- HTML helpers
 
-fn starts_with(c: &[char], i: usize, b: usize, pat: &str) -> bool {
+pub(crate) fn starts_with(c: &[char], i: usize, b: usize, pat: &str) -> bool {
     let mut k = i;
     for p in pat.chars() {
         if k >= b || c[k] != p {
@@ -324,7 +334,7 @@ fn is_ws_html(ch: char) -> bool {
 }
 
 /// End (exclusive) of a complete open or closing tag starting at `i` (`<`).
-fn tag_end(c: &[char], i: usize, b: usize) -> Option<usize> {
+pub(crate) fn tag_end(c: &[char], i: usize, b: usize) -> Option<usize> {
     let mut j = i + 1;
     let closing = j < b && c[j] == '/';
     if closing {
@@ -461,371 +471,165 @@ fn html_inline_end(c: &[char], i: usize, b: usize) -> Option<usize> {
     None
 }
 
-// ---------------------------------------------------------------- block scan
+// ---------------------------------------------------------------- directive scan
 
-const HTML_BLOCK_NAMES: &[&str] = &[
-    "address", "article", "aside", "base", "basefont", "blockquote", "body", "caption", "center", "col",
-    "colgroup", "dd", "details", "dialog", "dir", "div", "dl", "dt", "fieldset", "figcaption", "figure",
-    "footer", "form", "frame", "frameset", "h1", "h2", "h3", "h4", "h5", "h6", "head", "header", "hr",
-    "html", "iframe", "legend", "li", "link", "main", "menu", "menuitem", "nav", "noframes", "ol",
-    "optgroup", "option", "p", "param", "search", "section", "summary", "table", "tbody", "td", "tfoot",
-    "th", "thead", "title", "tr", "track", "ul",
-];
+/// One live `{{name}}` directive. `start`/`end` are char offsets into the source text.
+#[derive(Debug, Clone)]
+pub struct Directive {
+    pub start: usize,
+    pub end: usize,
+    pub name: String,
+    pub line: u32,
+    pub column: u32,
+}
 
-/// (indent in columns, index of the first non-blank char) of the line [s, e).
-fn indent_of(c: &[char], s: usize, e: usize) -> (usize, usize) {
-    let mut col = 0;
-    let mut i = s;
-    while i < e {
-        if c[i] == ' ' {
-            col += 1;
-        } else if c[i] == '\t' {
-            col += 4 - (col % 4);
+fn lc(starts: &[usize], first_line: u32, pos: usize) -> (u32, u32) {
+    let idx = match starts.binary_search(&pos) {
+        Ok(i) => i,
+        Err(i) => i - 1,
+    };
+    (first_line + idx as u32, (pos - starts[idx]) as u32 + 1)
+}
+
+/// Live directives of one inline run `v` (`vmap` maps its chars to source offsets). Stops at the
+/// first malformed `{{` and returns its error alongside the directives found before it.
+fn scan_leaf(
+    v: &[char],
+    vmap: &[usize],
+    starts: &[usize],
+    first_line: u32,
+    out: &mut Vec<Directive>,
+) -> Option<Diagnostic> {
+    let c = v;
+    let b = v.len();
+    let mut i = 0;
+    while i < b {
+        let ch = c[i];
+        if ch == '\\' {
+            if i + 1 < b && c[i + 1].is_ascii_punctuation() {
+                i += if c[i + 1] == '{' && i + 2 < b && c[i + 2] == '{' { 3 } else { 2 };
+            } else {
+                i += 1;
+            }
+        } else if ch == '`' {
+            let mut j = i;
+            while j < b && c[j] == '`' {
+                j += 1;
+            }
+            let n = j - i;
+            let mut k = j;
+            let mut found: Option<usize> = None;
+            while k < b {
+                if c[k] == '`' {
+                    let mut m = k;
+                    while m < b && c[m] == '`' {
+                        m += 1;
+                    }
+                    if m - k == n {
+                        found = Some(m);
+                        break;
+                    }
+                    k = m;
+                } else {
+                    k += 1;
+                }
+            }
+            i = found.unwrap_or(j);
+        } else if ch == '<' {
+            i = html_inline_end(c, i, b).unwrap_or(i + 1);
+        } else if ch == '{' && i + 1 < b && c[i + 1] == '{' {
+            let (line, col) = lc(starts, first_line, vmap[i]);
+            let bad = || {
+                err(
+                    Code::InvalidSyntax,
+                    "malformed variable reference: expected {{name}} with dotted ASCII identifier segments (write \\{{ for literal braces)",
+                )
+                .at_position(line, col)
+            };
+            let mut j = i + 2;
+            while j < b && (c[j] == ' ' || c[j] == '\t') {
+                j += 1;
+            }
+            let name_start = j;
+            loop {
+                if j < b && (c[j].is_ascii_alphabetic() || c[j] == '_') {
+                    j += 1;
+                    while j < b && (c[j].is_ascii_alphanumeric() || c[j] == '_') {
+                        j += 1;
+                    }
+                } else {
+                    return Some(bad());
+                }
+                if j < b && c[j] == '.' {
+                    j += 1;
+                } else {
+                    break;
+                }
+            }
+            let name_end = j;
+            while j < b && (c[j] == ' ' || c[j] == '\t') {
+                j += 1;
+            }
+            if !(j + 1 < b && c[j] == '}' && c[j + 1] == '}') {
+                return Some(bad());
+            }
+            out.push(Directive {
+                start: vmap[i],
+                end: vmap[j + 1] + 1,
+                name: c[name_start..name_end].iter().collect(),
+                line,
+                column: col,
+            });
+            i = j + 2;
         } else {
-            break;
-        }
-        i += 1;
-    }
-    (col, i)
-}
-
-fn rest_blank(c: &[char], from: usize, e: usize) -> bool {
-    c[from..e].iter().all(|&ch| ch == ' ' || ch == '\t')
-}
-
-/// Opening code fence at `fi`: (fence char, run length).
-fn fence_start(c: &[char], fi: usize, e: usize) -> Option<(char, usize)> {
-    let ch = c[fi];
-    if ch != '`' && ch != '~' {
-        return None;
-    }
-    let mut j = fi;
-    while j < e && c[j] == ch {
-        j += 1;
-    }
-    let len = j - fi;
-    if len < 3 {
-        return None;
-    }
-    if ch == '`' && c[j..e].contains(&'`') {
-        return None;
-    }
-    Some((ch, len))
-}
-
-fn is_fence_close(c: &[char], s: usize, e: usize, ch: char, len: usize) -> bool {
-    let (indent, fi) = indent_of(c, s, e);
-    if indent >= 4 || fi >= e || c[fi] != ch {
-        return false;
-    }
-    let mut j = fi;
-    while j < e && c[j] == ch {
-        j += 1;
-    }
-    j - fi >= len && rest_blank(c, j, e)
-}
-
-fn is_atx(c: &[char], fi: usize, e: usize) -> bool {
-    let mut j = fi;
-    while j < e && c[j] == '#' {
-        j += 1;
-    }
-    let n = j - fi;
-    n >= 1 && n <= 6 && (j == e || c[j] == ' ' || c[j] == '\t')
-}
-
-fn is_thematic(c: &[char], fi: usize, e: usize) -> bool {
-    let ch = c[fi];
-    if ch != '*' && ch != '-' && ch != '_' {
-        return false;
-    }
-    let mut count = 0;
-    for &x in &c[fi..e] {
-        if x == ch {
-            count += 1;
-        } else if x != ' ' && x != '\t' {
-            return false;
-        }
-    }
-    count >= 3
-}
-
-fn is_setext_eq(c: &[char], fi: usize, e: usize) -> bool {
-    let mut j = fi;
-    while j < e && c[j] == '=' {
-        j += 1;
-    }
-    j > fi && rest_blank(c, j, e)
-}
-
-fn name_matches(c: &[char], from: usize, e: usize, name: &str) -> bool {
-    let mut k = from;
-    for p in name.chars() {
-        if k >= e || c[k].to_ascii_lowercase() != p {
-            return false;
-        }
-        k += 1;
-    }
-    true
-}
-
-/// HTML block start kind (1..=7) of the line whose first non-blank char `<` is at `fi`.
-fn html_start(c: &[char], fi: usize, e: usize) -> Option<u8> {
-    for name in ["script", "pre", "style", "textarea"] {
-        if name_matches(c, fi + 1, e, name) {
-            let after = fi + 1 + name.len();
-            if after >= e || c[after] == ' ' || c[after] == '\t' || c[after] == '>' {
-                return Some(1);
-            }
-        }
-    }
-    if starts_with(c, fi, e, "<!--") {
-        return Some(2);
-    }
-    if starts_with(c, fi, e, "<?") {
-        return Some(3);
-    }
-    if starts_with(c, fi, e, "<![CDATA[") {
-        return Some(5);
-    }
-    if starts_with(c, fi, e, "<!") && fi + 2 < e && c[fi + 2].is_ascii_alphabetic() {
-        return Some(4);
-    }
-    let mut j = fi + 1;
-    if j < e && c[j] == '/' {
-        j += 1;
-    }
-    for name in HTML_BLOCK_NAMES.iter() {
-        let name: &str = name;
-        if name_matches(c, j, e, name) {
-            let after = j + name.len();
-            if after >= e
-                || c[after] == ' '
-                || c[after] == '\t'
-                || c[after] == '>'
-                || (c[after] == '/' && after + 1 < e && c[after + 1] == '>')
-            {
-                return Some(6);
-            }
-        }
-    }
-    if let Some(end) = tag_end(c, fi, e) {
-        if rest_blank(c, end, e) {
-            return Some(7);
+            i += 1;
         }
     }
     None
 }
 
-fn html_ends_on_line(c: &[char], s: usize, e: usize, kind: u8) -> bool {
-    let lower: String = c[s..e].iter().collect::<String>().to_ascii_lowercase();
-    match kind {
-        1 => ["</script>", "</pre>", "</style>", "</textarea>"].iter().any(|n| lower.contains(*n)),
-        2 => lower.contains("-->"),
-        3 => lower.contains("?>"),
-        4 => lower.contains('>'),
-        5 => lower.contains("]]>"),
-        _ => false,
+/// All live directives in source order, plus the error of the first malformed `{{` (if any).
+/// Directives inside code, HTML blocks, code spans and inline HTML are not live. A block-structure
+/// error (nesting limit) is returned as `Err`.
+fn scan_all(c: &[char], starts: &[usize], ends: &[usize], first_line: u32) -> Res<(Vec<Directive>, Option<Diagnostic>)> {
+    let leaves = crate::blocks::parse(c, starts, ends, first_line)?;
+    let mut found: Vec<Directive> = Vec::new();
+    for leaf in leaves {
+        if leaf.kind != crate::blocks::Kind::Paragraph && leaf.kind != crate::blocks::Kind::Heading {
+            continue;
+        }
+        let mut v: Vec<char> = Vec::new();
+        let mut vmap: Vec<usize> = Vec::new();
+        let mut prev_end = 0usize;
+        for (idx, &(s, e)) in leaf.segments.iter().enumerate() {
+            if idx > 0 {
+                v.push('\n');
+                vmap.push(prev_end);
+            }
+            for p in s..e {
+                v.push(c[p]);
+                vmap.push(p);
+            }
+            prev_end = e;
+        }
+        if let Some(d) = scan_leaf(&v, &vmap, starts, first_line, &mut found) {
+            return Ok((found, Some(d)));
+        }
     }
+    Ok((found, None))
 }
 
-#[derive(Clone, Copy)]
-enum Mode {
-    Normal,
-    Fence(char, usize),
-    Html(u8),
-}
-
-struct Doc {
-    c: Vec<char>,
-    starts: Vec<usize>,
-    first_line: u32,
-}
-
-impl Doc {
-    fn lc(&self, pos: usize) -> (u32, u32) {
-        let idx = match self.starts.binary_search(&pos) {
-            Ok(i) => i,
-            Err(i) => i - 1,
-        };
-        (self.first_line + idx as u32, (pos - self.starts[idx]) as u32 + 1)
+/// Live directives of `text`; a malformed `{{` is an error.
+pub fn directives(text: &str, first_line: u32) -> Res<Vec<Directive>> {
+    if text.len() > MAX_INPUT {
+        return Err(err(Code::ResourceLimit, "input is larger than 16 MiB"));
     }
-}
-
-fn line_bounds(c: &[char]) -> (Vec<usize>, Vec<usize>) {
-    let n = c.len();
-    let mut starts = vec![0usize];
-    let mut ends: Vec<usize> = Vec::new();
-    let mut i = 0;
-    while i < n {
-        if c[i] == '\n' {
-            ends.push(i);
-            starts.push(i + 1);
-        } else if c[i] == '\r' {
-            ends.push(i);
-            if i + 1 < n && c[i + 1] == '\n' {
-                i += 1;
-            }
-            starts.push(i + 1);
-        }
-        i += 1;
-    }
-    ends.push(n);
-    (starts, ends)
-}
-
-struct Ctx<'a> {
-    doc: &'a Doc,
-    vars: &'a Yaml,
-}
-
-impl<'a> Ctx<'a> {
-    fn push_range(&self, out: &mut String, a: usize, b: usize) {
-        out.extend(self.doc.c[a..b].iter());
-    }
-
-    /// Expand directives in the inline run c[a..b].
-    fn inline(&self, a: usize, b: usize, out: &mut String) -> Res<()> {
-        let c = &self.doc.c;
-        let mut i = a;
-        while i < b {
-            let ch = c[i];
-            if ch == '\\' {
-                if i + 1 < b && c[i + 1].is_ascii_punctuation() {
-                    let take = if c[i + 1] == '{' && i + 2 < b && c[i + 2] == '{' { 3 } else { 2 };
-                    self.push_range(out, i, i + take);
-                    i += take;
-                } else {
-                    out.push('\\');
-                    i += 1;
-                }
-            } else if ch == '`' {
-                let mut j = i;
-                while j < b && c[j] == '`' {
-                    j += 1;
-                }
-                let n = j - i;
-                let mut k = j;
-                let mut found: Option<usize> = None;
-                while k < b {
-                    if c[k] == '`' {
-                        let mut m = k;
-                        while m < b && c[m] == '`' {
-                            m += 1;
-                        }
-                        if m - k == n {
-                            found = Some(m);
-                            break;
-                        }
-                        k = m;
-                    } else {
-                        k += 1;
-                    }
-                }
-                match found {
-                    Some(m) => {
-                        self.push_range(out, i, m);
-                        i = m;
-                    }
-                    None => {
-                        self.push_range(out, i, j);
-                        i = j;
-                    }
-                }
-            } else if ch == '<' {
-                match html_inline_end(c, i, b) {
-                    Some(m) => {
-                        self.push_range(out, i, m);
-                        i = m;
-                    }
-                    None => {
-                        out.push('<');
-                        i += 1;
-                    }
-                }
-            } else if ch == '{' && i + 1 < b && c[i + 1] == '{' {
-                i = self.directive(i, b, out)?;
-            } else {
-                out.push(ch);
-                i += 1;
-            }
-        }
-        Ok(())
-    }
-
-    fn directive(&self, i: usize, b: usize, out: &mut String) -> Res<usize> {
-        let c = &self.doc.c;
-        let (line, col) = self.doc.lc(i);
-        let bad = || {
-            err(
-                Code::InvalidSyntax,
-                "malformed variable reference: expected {{name}} with dotted ASCII identifier segments (write \\{{ for literal braces)",
-            )
-            .at_position(line, col)
-        };
-        let mut j = i + 2;
-        while j < b && (c[j] == ' ' || c[j] == '\t') {
-            j += 1;
-        }
-        let name_start = j;
-        loop {
-            if j < b && (c[j].is_ascii_alphabetic() || c[j] == '_') {
-                j += 1;
-                while j < b && (c[j].is_ascii_alphanumeric() || c[j] == '_') {
-                    j += 1;
-                }
-            } else {
-                return Err(bad());
-            }
-            if j < b && c[j] == '.' {
-                j += 1;
-            } else {
-                break;
-            }
-        }
-        let name_end = j;
-        while j < b && (c[j] == ' ' || c[j] == '\t') {
-            j += 1;
-        }
-        if !(j + 1 < b && c[j] == '}' && c[j + 1] == '}') {
-            return Err(bad());
-        }
-        let name: String = c[name_start..name_end].iter().collect();
-        let value = match lookup(self.vars, &name) {
-            Some(v) => v,
-            None => {
-                return Err(err(Code::UndefinedVariable, format!("undefined variable \"{}\"", name))
-                    .at_position(line, col));
-            }
-        };
-        let text = match format_scalar(value) {
-            Ok(t) => t,
-            Err(d) => {
-                return Err(err(d.code, format!("{} (variable \"{}\")", d.message, name)).at_position(line, col));
-            }
-        };
-        let at_start = {
-            let prefix = match out.rfind(|ch: char| ch == '\n' || ch == '\r') {
-                Some(p) => &out[p + 1..],
-                None => out.as_str(),
-            };
-            block_start_prefix(prefix)
-        };
-        let escaped = escape_inline(&text, at_start).map_err(|d| d.at_position(line, col))?;
-        out.push_str(&escaped);
-        if out.len() > MAX_OUTPUT {
-            return Err(err(Code::ResourceLimit, "interpolated output is too large").at_position(line, col));
-        }
-        Ok(j + 2)
-    }
-
-    fn flush(&self, chunk: &mut Option<usize>, upto: usize, starts: &[usize], out: &mut String) -> Res<()> {
-        if let Some(first) = chunk.take() {
-            let a = starts[first];
-            let b = if upto < starts.len() { starts[upto] } else { self.doc.c.len() };
-            self.inline(a, b, out)?;
-        }
-        Ok(())
+    let c: Vec<char> = text.chars().collect();
+    let (starts, ends) = crate::blocks::line_bounds(&c);
+    let (found, pending) = scan_all(&c, &starts, &ends, first_line)?;
+    match pending {
+        Some(d) => Err(d),
+        None => Ok(found),
     }
 }
 
@@ -836,97 +640,44 @@ pub fn interpolate(text: &str, vars: &Yaml, first_line: u32) -> Res<String> {
         return Err(err(Code::ResourceLimit, "input is larger than 16 MiB"));
     }
     let c: Vec<char> = text.chars().collect();
-    let (starts, ends) = line_bounds(&c);
-    let doc = Doc { c, starts, first_line };
-    let ctx = Ctx { doc: &doc, vars };
-    let nl = doc.starts.len();
-    let total = doc.c.len();
+    let (starts, ends) = crate::blocks::line_bounds(&c);
+    let (found, pending) = scan_all(&c, &starts, &ends, first_line)?;
     let mut out = String::with_capacity(text.len());
-    let mut mode = Mode::Normal;
-    let mut para = false;
-    let mut chunk: Option<usize> = None;
-
-    for k in 0..nl {
-        let s = doc.starts[k];
-        let e = ends[k];
-        let term_end = if k + 1 < nl { doc.starts[k + 1] } else { total };
-        let c = &doc.c;
-
-        match mode {
-            Mode::Fence(ch, len) => {
-                ctx.push_range(&mut out, s, term_end);
-                if is_fence_close(c, s, e, ch, len) {
-                    mode = Mode::Normal;
-                }
-                continue;
+    let mut pos = 0usize;
+    for d in found {
+        let at = |dd: Diagnostic| dd.at_position(d.line, d.column);
+        let value = match lookup(vars, &d.name) {
+            Some(v) => v,
+            None => {
+                return Err(err(Code::UndefinedVariable, format!("undefined variable \"{}\"", d.name))
+                    .at_position(d.line, d.column));
             }
-            Mode::Html(kind) => {
-                let (_, fi) = indent_of(c, s, e);
-                if kind >= 6 && fi >= e {
-                    mode = Mode::Normal; // blank line ends the block; handled below
-                } else {
-                    ctx.push_range(&mut out, s, term_end);
-                    if kind <= 5 && html_ends_on_line(c, s, e, kind) {
-                        mode = Mode::Normal;
-                    }
-                    continue;
-                }
+        };
+        let text_val = match format_scalar(value) {
+            Ok(t) => t,
+            Err(e) => {
+                return Err(err(e.code, format!("{} (variable \"{}\")", e.message, d.name))
+                    .at_position(d.line, d.column));
             }
-            Mode::Normal => {}
+        };
+        out.extend(c[pos..d.start].iter());
+        let prefix = match out.rfind(|ch: char| ch == '\n' || ch == '\r') {
+            Some(p) => &out[p + 1..],
+            None => out.as_str(),
+        };
+        let escaped = escape_inline(&text_val, block_start_prefix(prefix)).map_err(at)?;
+        out.push_str(&escaped);
+        pos = d.end;
+        if out.len() > MAX_OUTPUT {
+            return Err(err(Code::ResourceLimit, "interpolated output is too large").at_position(d.line, d.column));
         }
-
-        let (indent, fi) = indent_of(c, s, e);
-        if fi >= e {
-            ctx.flush(&mut chunk, k, &doc.starts, &mut out)?;
-            ctx.push_range(&mut out, s, term_end);
-            para = false;
-            continue;
-        }
-        if indent >= 4 && !para {
-            ctx.flush(&mut chunk, k, &doc.starts, &mut out)?;
-            ctx.push_range(&mut out, s, term_end);
-            continue;
-        }
-        if indent < 4 {
-            if let Some((fch, flen)) = fence_start(c, fi, e) {
-                ctx.flush(&mut chunk, k, &doc.starts, &mut out)?;
-                ctx.push_range(&mut out, s, term_end);
-                mode = Mode::Fence(fch, flen);
-                para = false;
-                continue;
-            }
-            if c[fi] == '<' {
-                if let Some(kind) = html_start(c, fi, e) {
-                    if kind != 7 || !para {
-                        ctx.flush(&mut chunk, k, &doc.starts, &mut out)?;
-                        ctx.push_range(&mut out, s, term_end);
-                        para = false;
-                        if !(kind <= 5 && html_ends_on_line(c, fi, e, kind)) {
-                            mode = Mode::Html(kind);
-                        }
-                        continue;
-                    }
-                }
-            }
-            if c[fi] == '#' && is_atx(c, fi, e) {
-                ctx.flush(&mut chunk, k, &doc.starts, &mut out)?;
-                chunk = Some(k);
-                ctx.flush(&mut chunk, k + 1, &doc.starts, &mut out)?;
-                para = false;
-                continue;
-            }
-            if is_thematic(c, fi, e) || (para && is_setext_eq(c, fi, e)) {
-                ctx.flush(&mut chunk, k, &doc.starts, &mut out)?;
-                ctx.push_range(&mut out, s, term_end);
-                para = false;
-                continue;
-            }
-        }
-        if chunk.is_none() {
-            chunk = Some(k);
-        }
-        para = true;
     }
-    ctx.flush(&mut chunk, nl, &doc.starts, &mut out)?;
+    if let Some(d) = pending {
+        return Err(d);
+    }
+    out.extend(c[pos..].iter());
+    if out.len() > MAX_OUTPUT {
+        return Err(err(Code::ResourceLimit, "interpolated output is too large"));
+    }
     Ok(out)
 }

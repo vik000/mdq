@@ -56,6 +56,8 @@ meta_cascade = _i.meta_cascade
 var_format_scalar = _i.var_format_scalar
 md_escape_inline = _i.md_escape_inline
 interpolate = _i.interpolate
+md_regions = _i.md_regions
+directive_scan = _i.directive_scan
 
 # E3.1 UTF-8 input
 utf8_decode = _i.utf8_decode

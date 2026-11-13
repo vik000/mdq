@@ -82,3 +82,23 @@ def live_and_literal(src, name="x"):
         elif tok.type in ("fence", "code_block", "html_block"):
             literal += tok.content.count(needle)
     return live, literal
+
+
+_BLOCK_KINDS = {"paragraph_open": "paragraph", "heading_open": "heading", "fence": "code_fence",
+                "code_block": "code_indented", "html_block": "html", "hr": "thematic_break"}
+
+
+def leaf_blocks(src):
+    """Leaf blocks per markdown-it: [(kind, start_line, end_line)] (0-based, end exclusive)
+    with trailing blank source lines trimmed, so open fences compare equal."""
+    lines = src.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    out = []
+    for tok in _md(False).parse(src):
+        kind = _BLOCK_KINDS.get(tok.type)
+        if kind is None or tok.map is None:
+            continue
+        a, b = tok.map
+        while b > a + 1 and not lines[b - 1].strip():
+            b -= 1
+        out.append((kind, a, b))
+    return out

@@ -407,6 +407,14 @@ def test_headings_and_lists_and_quotes_expand():
     assert run("| {{s}} |\n|---|\n| {{s}} |\n") == "| text |\n|---|\n| text |\n"
 
 
+def test_trailing_hashes_in_a_heading_are_not_a_closing_sequence():
+    assert mi.md_escape_inline("a #") == "a \\#"
+    assert mi.md_escape_inline("a ###") == "a \\###"
+    assert mi.md_escape_inline("a#") == "a#"
+    assert mi.md_escape_inline("a # b") == "a # b"
+    assert mi.interpolate("# {{x}}\n", {"x": "\\ #"}) == "# \\\\ \\#\n"
+
+
 def test_line_ends_are_preserved():
     assert run("a\r\n{{s}}\r\n\r\n```\r\n{{s}}\r\n```\r\n") == "a\r\ntext\r\n\r\n```\r\n{{s}}\r\n```\r\n"
     assert run("{{s}}\r{{s}}") == "text\rtext"

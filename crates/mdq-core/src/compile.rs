@@ -332,7 +332,7 @@ pub fn compile(entry: &str, read: Read<'_>, inputs: &Yaml, snapshot: &[SVal], fx
     };
     let merged = cascade_values(&cas, bottom_ref, top.as_ref().map(|t| ("<inputs>", t)))?;
     check_versions(&merged.value)?;
-    let values = data::resolve(&decls, snapshot, &host_values)?;
+    let values = data::resolve(&decls, snapshot, &host_values).map_err(|d| data::locate_declared(d, &decls, &files_only.provenance))?;
     check_units(&values)?;
     let mut vars = match get(&merged.value, "variables") {
         None | Some(Yaml::Null) => Yaml::Map(Vec::new()),

@@ -22,6 +22,25 @@ Per feature. Veto by editing or telling me. Test-plan gap rows (G-numbers) in `d
 **Open**
 - Per-member encryption layout (spec gap 4): strict xfail `test_per_member_encryption_layout`.
 
+## E8.3 CLI (G54)
+**Decisions**
+- Commands: `mdq build ENTRY` (Markdown to stdout or `-o FILE`), `mdq check ENTRY` (evaluate, diagnostics only), `mdq sources ENTRY` (declarations, offline), `mdq --version`. Common options: `--root DIR` or `--package FILE` (`--identity FILE`, `--passphrase-file FILE` for .mdq.age), `--input name=value`, `--snapshot FILE.json`, `--profile`, `--calc-blocks`, `--allow-plaintext`, `--format text|json`. No network command: `test_source` stays a library call. Never writes over a source file.
+- Exit codes: 0 success; 1 invalid input (syntax, metadata, references, variables, calc, any MDQ_SOURCE_*); 2 usage error; 3 unsupported feature; 4 security denied; 5 resource limit.
+- `--format json`: always one JSON object on stdout `{ok, diagnostics: [{code, message, path, line, column}], ...}`; success adds `markdown`/`calc`/`values` (build), `calc`/`values` (check), `declarations` (sources); decimals as strings; JSON Schema shipped as `mdq/cli.schema.json`, every output validated in tests (jsonschema in dev extras).
+- `-o` protection covers every file the command read through the file system (document, metadata files, sidecars, imports, variable files, bibliographies) and the package file; replacing a previous output is fine.
+- `--input` values: a plain decimal is a number, `true`/`false` a boolean, anything else text (so `007` stays text).
+- Option files (snapshot, observations) are JSON whose numbers are read as exact Decimal; an unreadable or invalid file is a usage error (exit 2), not a document error.
+- Value errors about a declared variable (missing input, missing snapshot entry, type mismatch) now carry the declaring file's path (core change, also visible in the library).
+- `__main__.py` is guarded so tools (stubtest) can import it.
+- Parity of library and CLI on shared JSON fixtures waits for the conformance fixtures (cross-cutting).
+
+**Sacrifices**
+- No network command; `test_source` is library-only.
+- No `--limits` or `--inputs FILE` options yet.
+
+**Open**
+- The G26 escaper also escapes a value starting with `-` at the start of a line (`-1.5` becomes `\-1.5`, renders the same); same question as `7.5`.
+
 ## E8.2 exceptions, typing, threads, memory (G53)
 **Decisions**
 - Exception hierarchy: one subclass of `MdqError` per stable code (16), plus two families: `ReferenceFailure` (missing import, import cycle, ambiguous/unresolved reference, duplicate id) and `SourceError` (the four MDQ_SOURCE_* codes). `.code`, `.path`, `.line`, `.column` stay on every exception; `except mdq.MdqError` still catches everything. `ReferenceFailure` instead of `ReferenceError` so Python's built-in is not shadowed.

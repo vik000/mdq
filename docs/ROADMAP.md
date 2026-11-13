@@ -3,7 +3,7 @@
 Updated with every commit. Estimates are in sessions (one session = one feature cycle: Rust, shim check, tests,
 commit message), rough, about ±50%. Feature definitions and tests: `docs/TEST_PLAN.md` section 4.
 
-**Last update:** E8.2 exceptions, typing, Decimal fidelity, threads and memory built natively (5298 passed, 4 strict xfails).
+**Last update:** E8.3 CLI built natively (5330 passed, 4 strict xfails).
 
 ## Status
 
@@ -18,11 +18,11 @@ commit message), rough, about ±50%. Feature definitions and tests: `docs/TEST_P
 | 5 Rich features and export (F10, F23) | done | E5.1 highlight/callout/details/columns ✔, E5.2a math/footnotes ✔ (fixes: fixed point 1f8c87b, backticks 3544e4b), E5.2b citations ✔, E5.3 TOC ✔, E5.4 `export_markdown` ✔ | | 0 |
 | 6 Sources and policy (F16–F19) | done | E6.1 declarations and URL templates ✔, E6.2 JSON Pointer and types ✔, E6.3 URL/IP classification ✔, E6.4 policy ✔, E6.5 resolver, fake transport and snapshots ✔ | | 0 |
 | 7 Packages and encryption (F20, F21) | done | E7.1 hostile-zip reader ✔, E7.2 manifest and `package_open` ✔, E7.3 age (X25519 + passphrase, pyrage-verified) ✔ | c04ca23 (E7.1), 1f8c87b (E7.2 + E5.2a fix), fd299f6 (E7.3) | 0 |
-| 8 API, CLI, packaging (F25, F26) | in progress | E8.1a `compile`/`evaluate`, MemoryFS/DirectoryFS ✔, E8.1b variable files, bibliographies, snapshots, FX ✔, E8.1c PackageFS, allow_plaintext, `validate_sources`, `test_source` ✔, E8.2 exception hierarchy, py.typed + stubs (mypy --strict, stubtest), threads, memory ✔, E8.3 CLI, E8.4 wheel smoke test | c14db94 (E8.1a), fa0ede4 (E8.1b), bab1932 (E8.1c) | 1.5 |
+| 8 API, CLI, packaging (F25, F26) | in progress | E8.1a `compile`/`evaluate`, MemoryFS/DirectoryFS ✔, E8.1b variable files, bibliographies, snapshots, FX ✔, E8.1c PackageFS, allow_plaintext, `validate_sources`, `test_source` ✔, E8.2 exception hierarchy, py.typed + stubs (mypy --strict, stubtest), threads, memory ✔, E8.3 CLI (build/check/sources, exit codes, JSON schema) ✔, E8.4 wheel smoke test | c14db94 (E8.1a), fa0ede4 (E8.1b), bab1932 (E8.1c), 82ca2c3 (E8.2) | 0.5 |
 | Cross-cutting | open | rule ledger and conformance fixtures, CI (incl. `HYPOTHESIS_PROFILE=ci`), Rust coverage, sdist fix (`include_str!("../../../spec/units.tsv")`) | | 3 |
-| **Total** | | | | **about 4.5** |
+| **Total** | | | | **about 3.5** |
 
-At the pace so far (29 commits for Epics 0–6), the remaining 4.5 sessions are roughly 2–4 working days; build-error rounds add to that.
+At the pace so far (29 commits for Epics 0–6), the remaining 3.5 sessions are roughly 2–4 working days; build-error rounds add to that.
 
 ## Open decisions
 
@@ -38,12 +38,13 @@ At the pace so far (29 commits for Epics 0–6), the remaining 4.5 sessions are 
 - E5.2a (G38): maths overlapping a code span (`` $`$` ``): Pandoc vs CommonMark, which wins? Current: maths (strict xfail)
 - E7.3 (G49): RustCrypto primitives + own age format, host-supplied randomness, X25519 + passphrase (scrypt cap log2 N <= 20), explicit decrypt API: offered for veto
 - E8.1a (G50): paragraphs merge across removed `:::if`/`:::for` fences; insert a blank line (loop-built lists become loose) or not? Strict xfail
-- E8.1a: G26 escaper turns `7.5` at a line start into `7\.5` (renders the same); narrow it to real list markers?
+- E8.1a: G26 escaper turns `7.5` / `-1.5` at a line start into `7\.5` / `\-1.5` (renders the same); narrow it to real list markers?
 - E8.1a (G50): calc order, `document.*`/`variables` scope, imported frontmatter ignored, calc in quotes/lists refused: offered for veto
+- E8.3 (G54): CLI commands, exit codes 0-5, one JSON object per run, `-o` refuses every file read, `--input` typing: offered for veto
 - E8.2 (G53): one exception class per code plus ReferenceFailure/SourceError families; compile holds the GIL (correct, not parallel): offered for veto
 - E8.1c (G52): document requests compose most-restrictively across manifest and metadata files; `allow_plaintext` per call; `evaluate` of encrypted packages allowed: offered for veto
 - E8.1b (G51): declarations before inputs, inputs for source variables refused, declared units checked up front, returned metadata has files loaded and declarations replaced: offered for veto
 
 ## Next
 
-1. E8.3 CLI (`mdq` console script: exit codes per outcome, `--format json` diagnostics with a schema, `--version`, offline by default). Then E8.4 wheel smoke test, then the cross-cutting items. G16 still open.
+1. E8.4 wheel smoke test (build the wheel, install it in a clean venv, import, run `mdq` on one document; check `py.typed`, `_native.pyi` and `cli.schema.json` are in the wheel). Then the cross-cutting items (conformance fixtures + CLI parity, CI, Rust coverage, sdist fix). G16 still open.

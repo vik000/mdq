@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mdq.invalid/schemas/cli-0.1.json",
+  "title": "mdq CLI --format json output (0.1)",
+  "description": "Exactly one object per run. Decimal values are strings with their exact digits, never JSON numbers.",
+  "type": "object",
+  "required": ["ok", "diagnostics"],
+  "properties": {
+    "ok": {"type": "boolean"},
+    "diagnostics": {"type": "array", "items": {"$ref": "#/$defs/diagnostic"}},
+    "usage_error": {"type": "string", "minLength": 1},
+    "markdown": {"type": "string"},
+    "calc": {"type": "array", "items": {"$ref": "#/$defs/calcBlock"}},
+    "values": {"type": "array", "items": {"$ref": "#/$defs/declaredValue"}},
+    "declarations": {"type": "array", "items": {"$ref": "#/$defs/declaration"}}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {"if": {"properties": {"ok": {"const": false}}},
+     "then": {"anyOf": [{"properties": {"diagnostics": {"minItems": 1}}}, {"required": ["usage_error"]}],
+              "not": {"anyOf": [{"required": ["markdown"]}, {"required": ["calc"]}, {"required": ["values"]},
+                                {"required": ["declarations"]}]}}},
+    {"if": {"properties": {"ok": {"const": true}}},
+     "then": {"properties": {"diagnostics": {"maxItems": 0}}, "not": {"required": ["usage_error"]}}}
+  ],
+  "$defs": {
+    "decimal": {"type": "string", "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]*[1-9])?$"},
+    "diagnostic": {
+      "type": "object",
+      "required": ["code", "message", "path", "line", "column"],
+      "properties": {
+        "code": {"enum": ["MDQ_UNDEFINED_VARIABLE", "MDQ_MISSING_IMPORT", "MDQ_IMPORT_CYCLE", "MDQ_AMBIGUOUS_REFERENCE",
+                          "MDQ_UNRESOLVED_REFERENCE", "MDQ_DUPLICATE_ID", "MDQ_METADATA_ERROR", "MDQ_INVALID_SYNTAX",
+                          "MDQ_UNSUPPORTED_FEATURE", "MDQ_SECURITY_DENIED", "MDQ_CALC_ERROR", "MDQ_RESOURCE_LIMIT",
+                          "MDQ_SOURCE_UNRESOLVED", "MDQ_SOURCE_INVALID", "MDQ_SOURCE_FETCH_FAILED",
+                          "MDQ_SOURCE_TYPE_ERROR"]},
+        "message": {"type": "string", "minLength": 1},
+        "path": {"type": ["string", "null"]},
+        "line": {"type": ["integer", "null"], "minimum": 1},
+        "column": {"type": ["integer", "null"], "minimum": 1}
+      },
+      "additionalProperties": false
+    },
+    "calcValue": {
+      "type": "object",
+      "required": ["name", "line", "column", "type", "value", "unit", "currency", "display"],
+      "properties": {
+        "name": {"type": "string"}, "line": {"type": "integer"}, "column": {"type": "integer"},
+        "type": {"enum": ["decimal", "quantity", "money"]},
+        "value": {"$ref": "#/$defs/decimal"},
+        "unit": {"type": ["string", "null"]}, "currency": {"type": ["string", "null"]},
+        "display": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "calcBlock": {
+      "type": "object",
+      "required": ["path", "line", "source", "results"],
+      "properties": {
+        "path": {"type": "string"}, "line": {"type": "integer", "minimum": 1}, "source": {"type": "string"},
+        "results": {"type": "array", "items": {"$ref": "#/$defs/calcValue"}}
+      },
+      "additionalProperties": false
+    },
+    "declaredValue": {
+      "type": "object",
+      "required": ["name", "type", "value", "unit", "retrieved_at", "source"],
+      "properties": {
+        "name": {"type": "string"},
+        "type": {"enum": ["number", "string", "boolean", "date"]},
+        "value": {"type": ["string", "boolean"]},
+        "unit": {"type": ["string", "null"]},
+        "retrieved_at": {"type": ["string", "null"]},
+        "source": {"type": ["object", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "declaration": {
+      "type": "object",
+      "required": ["name", "type", "unit", "source", "url"],
+      "properties": {
+        "name": {"type": "string"},
+        "type": {"enum": ["number", "string", "boolean", "date"]},
+        "unit": {"type": ["string", "null"]},
+        "source": {"type": ["object", "null"]},
+        "url": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    }
+  }
+}

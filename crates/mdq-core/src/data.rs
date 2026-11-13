@@ -301,3 +301,16 @@ pub fn load_bibliographies(
     }
     Ok(out)
 }
+
+/// Give a value error (missing snapshot entry, missing input, type mismatch) the path of the file
+/// that declared the variable it names ('name' in quotes in the message).
+pub fn locate_declared(d: Diagnostic, decls: &[Declared], prov: &[(String, String)]) -> Diagnostic {
+    if d.path.is_some() {
+        return d;
+    }
+    let named = decls.iter().find(|x| d.message.contains(&format!("'{}'", x.name)));
+    match named.and_then(|x| layer_of(prov, &pointer("/variables", &x.name))) {
+        Some(layer) if !layer.starts_with('<') => in_file(d.clone(), layer),
+        _ => d,
+    }
+}

@@ -38,13 +38,56 @@ use pyo3::exceptions::{PyException, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyBytes, PyDict, PyInt, PyList, PyString, PyTuple};
 
-// Python-visible exception `mdq.MdqError` (attributes are set in `to_py_err`).
+// Python-visible exceptions (E8.2, G53). `mdq.MdqError` is the root; every stable code has its own
+// subclass, and two families group related codes. Attributes are set in `to_py_err`.
+// `create_exception!(module, Name, Base)` defines a new Python class `module.Name(Base)`.
 pyo3::create_exception!(mdq, MdqError, PyException);
+pyo3::create_exception!(mdq, ReferenceFailure, MdqError);
+pyo3::create_exception!(mdq, SourceError, MdqError);
+pyo3::create_exception!(mdq, UndefinedVariableError, MdqError);
+pyo3::create_exception!(mdq, MetadataError, MdqError);
+pyo3::create_exception!(mdq, InvalidSyntaxError, MdqError);
+pyo3::create_exception!(mdq, UnsupportedFeatureError, MdqError);
+pyo3::create_exception!(mdq, SecurityDeniedError, MdqError);
+pyo3::create_exception!(mdq, CalcError, MdqError);
+pyo3::create_exception!(mdq, ResourceLimitError, MdqError);
+pyo3::create_exception!(mdq, MissingImportError, ReferenceFailure);
+pyo3::create_exception!(mdq, ImportCycleError, ReferenceFailure);
+pyo3::create_exception!(mdq, AmbiguousReferenceError, ReferenceFailure);
+pyo3::create_exception!(mdq, UnresolvedReferenceError, ReferenceFailure);
+pyo3::create_exception!(mdq, DuplicateIdError, ReferenceFailure);
+pyo3::create_exception!(mdq, SourceUnresolvedError, SourceError);
+pyo3::create_exception!(mdq, SourceInvalidError, SourceError);
+pyo3::create_exception!(mdq, SourceFetchFailedError, SourceError);
+pyo3::create_exception!(mdq, SourceTypeError, SourceError);
 
-/// Turn a core `Diagnostic` into a Python `MdqError` carrying
+/// The exception class for a code. The `match` has no catch-all arm, so a new `Code` variant
+/// without a class is a compile error rather than a silent fallback.
+fn error_for(code: Code, msg: String) -> PyErr {
+    match code {
+        Code::UndefinedVariable => UndefinedVariableError::new_err(msg),
+        Code::MissingImport => MissingImportError::new_err(msg),
+        Code::ImportCycle => ImportCycleError::new_err(msg),
+        Code::AmbiguousReference => AmbiguousReferenceError::new_err(msg),
+        Code::UnresolvedReference => UnresolvedReferenceError::new_err(msg),
+        Code::DuplicateId => DuplicateIdError::new_err(msg),
+        Code::MetadataError => MetadataError::new_err(msg),
+        Code::InvalidSyntax => InvalidSyntaxError::new_err(msg),
+        Code::UnsupportedFeature => UnsupportedFeatureError::new_err(msg),
+        Code::SecurityDenied => SecurityDeniedError::new_err(msg),
+        Code::CalcError => CalcError::new_err(msg),
+        Code::ResourceLimit => ResourceLimitError::new_err(msg),
+        Code::SourceUnresolved => SourceUnresolvedError::new_err(msg),
+        Code::SourceInvalid => SourceInvalidError::new_err(msg),
+        Code::SourceFetchFailed => SourceFetchFailedError::new_err(msg),
+        Code::SourceTypeError => SourceTypeError::new_err(msg),
+    }
+}
+
+/// Turn a core `Diagnostic` into the Python exception for its code, carrying
 /// `.code .path .line .column` attributes.
 fn to_py_err(py: Python<'_>, d: Diagnostic) -> PyErr {
-    let err = MdqError::new_err(d.message.clone());
+    let err = error_for(d.code, d.message.clone());
     let value = err.value(py);
     // Setting plain attributes on a fresh exception object cannot reasonably fail.
     let _ = value.setattr("code", d.code.as_str());
@@ -1973,6 +2016,19 @@ fn age_is(data: &[u8]) -> bool {
     age::is_age(data)
 }
 
+/// Internal test hook: raise the exception of a stable code (E8.2), to test the class hierarchy for
+/// every code without staging a real failure for each. Unknown code: ValueError.
+#[pyfunction]
+#[pyo3(name = "_diagnostic_probe", signature = (code, message="probe"))]
+fn diagnostic_probe(py: Python<'_>, code: &str, message: &str) -> PyResult<()> {
+    let c = Code::ALL
+        .iter()
+        .copied()
+        .find(|c| c.as_str() == code)
+        .ok_or_else(|| PyValueError::new_err("unknown diagnostic code"))?;
+    Err(to_py_err(py, Diagnostic::new(c, message).at("probe.md", 3, 7)))
+}
+
 /// Internal: profiles this build implements.
 #[pyfunction]
 fn supported_profiles() -> Vec<&'static str> {
@@ -1997,6 +2053,24 @@ fn panic_probe() {
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
     m.add("MdqError", py.get_type::<MdqError>())?;
+    m.add("ReferenceFailure", py.get_type::<ReferenceFailure>())?;
+    m.add("SourceError", py.get_type::<SourceError>())?;
+    m.add("UndefinedVariableError", py.get_type::<UndefinedVariableError>())?;
+    m.add("MetadataError", py.get_type::<MetadataError>())?;
+    m.add("InvalidSyntaxError", py.get_type::<InvalidSyntaxError>())?;
+    m.add("UnsupportedFeatureError", py.get_type::<UnsupportedFeatureError>())?;
+    m.add("SecurityDeniedError", py.get_type::<SecurityDeniedError>())?;
+    m.add("CalcError", py.get_type::<CalcError>())?;
+    m.add("ResourceLimitError", py.get_type::<ResourceLimitError>())?;
+    m.add("MissingImportError", py.get_type::<MissingImportError>())?;
+    m.add("ImportCycleError", py.get_type::<ImportCycleError>())?;
+    m.add("AmbiguousReferenceError", py.get_type::<AmbiguousReferenceError>())?;
+    m.add("UnresolvedReferenceError", py.get_type::<UnresolvedReferenceError>())?;
+    m.add("DuplicateIdError", py.get_type::<DuplicateIdError>())?;
+    m.add("SourceUnresolvedError", py.get_type::<SourceUnresolvedError>())?;
+    m.add("SourceInvalidError", py.get_type::<SourceInvalidError>())?;
+    m.add("SourceFetchFailedError", py.get_type::<SourceFetchFailedError>())?;
+    m.add("SourceTypeError", py.get_type::<SourceTypeError>())?;
     m.add_function(wrap_pyfunction!(version_info, m)?)?;
 
     // `mdq._internal` re-exports everything registered here (unstable, for tests).
@@ -2005,6 +2079,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(supported_profiles, &internal)?)?;
     internal.add_function(wrap_pyfunction!(check_required, &internal)?)?;
     internal.add_function(wrap_pyfunction!(panic_probe, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(diagnostic_probe, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dec_canonical, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dec_add, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dec_sub, &internal)?)?;

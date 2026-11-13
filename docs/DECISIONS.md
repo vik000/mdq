@@ -22,6 +22,21 @@ Per feature. Veto by editing or telling me. Test-plan gap rows (G-numbers) in `d
 **Open**
 - Per-member encryption layout (spec gap 4): strict xfail `test_per_member_encryption_layout`.
 
+## E8.2 exceptions, typing, threads, memory (G53)
+**Decisions**
+- Exception hierarchy: one subclass of `MdqError` per stable code (16), plus two families: `ReferenceFailure` (missing import, import cycle, ambiguous/unresolved reference, duplicate id) and `SourceError` (the four MDQ_SOURCE_* codes). `.code`, `.path`, `.line`, `.column` stay on every exception; `except mdq.MdqError` still catches everything. `ReferenceFailure` instead of `ReferenceError` so Python's built-in is not shadowed.
+- The code-to-class mapping is a Rust `match` without a fallback arm: a new code without a class does not compile.
+- Typing: the compiled module gets a hand-written stub (`_native.pyi`), checked by `stubtest`; the unstable `_internal` hooks stay untyped and are excluded from `mypy --strict`. `mypy` joins the dev extras.
+- Thread safety comes from the GIL: compile holds it (the host's read/transport callbacks are Python), so calls are serialised and results identical; no shared mutable state in the core.
+- Memory is measured as peak RSS growth (`ru_maxrss`), because Rust allocations are invisible to `tracemalloc`.
+
+**Sacrifices**
+- Compile does not release the GIL, so threads do not run compiles in parallel (correct, not faster).
+- `_internal` has no type stubs.
+
+**Open**
+- None new.
+
 ## E8.1c packages in compile and the public source API (G52)
 **Decisions**
 - Packages: `pkg = mdq.PackageFS(data, identities=None, passphrase=None, limits=None)` opens and checks the package (E7.1-E7.3); `mdq.compile(pkg)` compiles its entrypoint (`entry` optional). The manifest's metadata is the lowest layer (under the root `.mdq.yaml`); its `security`/`requirements` are requests only (E6.4). Works with `evaluate` and every option.

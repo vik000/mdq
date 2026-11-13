@@ -10,19 +10,30 @@ import os
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import PurePath
-from typing import Any, Callable, Mapping, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, Sequence, Tuple, Union
 
-from mdq import _internal as _i
+from mdq import _internal as _internal_module
 from mdq._native import MdqError
 
-__all__ = ["MemoryFS", "DirectoryFS", "PackageFS", "CalcValue", "CalcBlock", "DeclaredValue", "SourceDeclaration",
+# The unstable test hooks are deliberately untyped; the public API below is fully typed.
+_i: Any = _internal_module
+
+JsonDict = Dict[str, Any]
+
+
+class Readable(Protocol):
+    """Anything with `read(path)`: the bytes or text of a root-relative path, or None if it does not exist."""
+
+    def read(self, path: str) -> Optional[Union[str, bytes]]: ...
+
+__all__ = ["MemoryFS", "DirectoryFS", "PackageFS", "Readable", "FileSystem", "Entry", "Transport", "JsonDict", "CalcValue", "CalcBlock", "DeclaredValue", "SourceDeclaration",
            "Result", "Evaluation", "compile", "evaluate", "validate_sources", "test_source"]
 
 
 class MemoryFS:
     """Files held in memory: `{root-relative path: str | bytes}`. Paths use `/` and are case-sensitive."""
 
-    def __init__(self, files: Mapping[str, Union[str, bytes]]):
+    def __init__(self, files: Mapping[str, Union[str, bytes]]) -> None:
         if not isinstance(files, Mapping):
             raise TypeError("MemoryFS takes a mapping of path -> str | bytes")
         for k, v in files.items():
@@ -38,13 +49,13 @@ class DirectoryFS:
     """Files under a directory on disk, confined to it (E4.1 rules: `..`, absolute paths and symlinks
     leading outside are MDQ_SECURITY_DENIED). Only reads; never writes."""
 
-    def __init__(self, root: Union[str, "os.PathLike[str]"]):
-        root = os.fspath(root)
-        if not isinstance(root, str):
+    def __init__(self, root: Union[str, "os.PathLike[str]"]) -> None:
+        path = os.fspath(root)
+        if not isinstance(path, str):
             raise TypeError("DirectoryFS root must be a str or path")
-        if not os.path.isdir(root):
+        if not os.path.isdir(path):
             raise ValueError("DirectoryFS root must be an existing directory")
-        self._root = root
+        self._root: str = path
 
     def read(self, path: str) -> Optional[bytes]:
         try:
@@ -54,7 +65,8 @@ class DirectoryFS:
                 return None
             raise
         with open(real, "rb") as f:
-            return f.read()
+            data: bytes = f.read()
+        return data
 
 
 class PackageFS:
@@ -62,28 +74,30 @@ class PackageFS:
     host's `identities` / `passphrase`). Opening checks everything (hostile zip, manifest, entrypoint) and
     never fetches. Read-only; `mdq.compile(pkg)` compiles the entrypoint."""
 
-    def __init__(self, data: bytes, *, identities: Optional[list] = None, passphrase: Optional[str] = None,
-                 limits: Optional[Mapping[str, int]] = None, max_work_factor: int = 20):
+    def __init__(self, data: bytes, *, identities: Optional[Sequence[str]] = None, passphrase: Optional[str] = None,
+                 limits: Optional[Mapping[str, int]] = None, max_work_factor: int = 20) -> None:
         if not isinstance(data, bytes):
             raise TypeError("PackageFS takes the package as bytes")
-        self.encrypted: bool = _i.age_is(data)
+        self.encrypted: bool = bool(_i.age_is(data))
+        ids = list(identities) if identities is not None else None
+        p: JsonDict
         if self.encrypted:
-            p = _i.package_open_age(data, identities, passphrase, limits, max_work_factor)
+            p = _i.package_open_age(data, ids, passphrase, limits, max_work_factor)
         else:
             p = _i.package_open(data, limits)
-        self.manifest = {k: p[k] for k in ("format", "version", "entrypoint", "features")}
+        self.manifest: JsonDict = {k: p[k] for k in ("format", "version", "entrypoint", "features")}
         self.entrypoint: str = p["entrypoint_member"]
-        self.metadata: dict = p["metadata"]
-        self.requests: dict = p["requests"]
+        self.metadata: JsonDict = p["metadata"]
+        self.requests: JsonDict = p["requests"]
         self.files: Tuple[str, ...] = tuple(p["files"])
         self.directories: Tuple[str, ...] = tuple(p["directories"])
         # Member names are unique in NFC (E7.1); look paths up the same way.
-        self._by_id = {_i.path_identity(n): d for n, d in p["files"].items()}
+        self._by_id: Dict[str, bytes] = {_i.path_identity(n): d for n, d in p["files"].items()}
 
     def read(self, path: str) -> Optional[bytes]:
         return self._by_id.get(_i.path_identity(path))
 
-    def _info(self) -> dict:
+    def _info(self) -> JsonDict:
         return {"metadata": self.metadata, "requests": self.requests, "encrypted": self.encrypted}
 
 
@@ -116,12 +130,12 @@ class DeclaredValue:
     value: Any  # Decimal | str | bool | "YYYY-MM-DD"
     unit: Optional[str]
     retrieved_at: Optional[str]
-    source: Optional[dict]
+    source: Optional[JsonDict]
 
 
 @dataclass(frozen=True)
 class Evaluation:
-    metadata: dict
+    metadata: JsonDict
     provenance: Tuple[Tuple[str, str], ...]
     calc: Tuple[CalcBlock, ...]
     values: Tuple[DeclaredValue, ...]
@@ -138,20 +152,25 @@ class SourceDeclaration:
     name: str
     type: str
     unit: Optional[str]
-    source: Optional[dict]  # None = host-supplied
+    source: Optional[JsonDict]  # None = host-supplied
     url: Optional[str]  # http sources: the URL with its arguments filled in
 
 
 _LIMITS = ("max_iterations", "max_depth", "max_expansions", "max_bytes")
 
+FileSystem = Union[MemoryFS, DirectoryFS, PackageFS, Mapping[str, Union[str, bytes]], Readable]
+Entry = Union[str, PurePath, PackageFS, None]
+Transport = Callable[[JsonDict], JsonDict]
+
 
 def _reader(fs: Any) -> Callable[[str], Any]:
     if isinstance(fs, Mapping):
         fs = MemoryFS(fs)
-    read = getattr(fs, "read", None)
+    read: Any = getattr(fs, "read", None)
     if not callable(read):
         raise TypeError("fs must be a MemoryFS, a DirectoryFS, a dict, or an object with read(path)")
-    return read
+    reader: Callable[[str], Any] = read
+    return reader
 
 
 def _entry(entry: Any) -> str:
@@ -162,12 +181,12 @@ def _entry(entry: Any) -> str:
     return entry
 
 
-def _limits(limits: Optional[Mapping[str, int]]) -> dict:
+def _limits(limits: Optional[Mapping[str, int]]) -> Dict[str, int]:
     if limits is None:
         return {}
     if not isinstance(limits, Mapping):
         raise TypeError("limits must be a dict")
-    out = {}
+    out: Dict[str, int] = {}
     for k, v in limits.items():
         if k not in _LIMITS:
             raise ValueError(f"unknown limit {k!r} (known: {', '.join(_LIMITS)})")
@@ -179,7 +198,7 @@ def _limits(limits: Optional[Mapping[str, int]]) -> dict:
     return out
 
 
-def _target(entry, fs):
+def _target(entry: Any, fs: Any) -> Tuple[str, Any, Optional[JsonDict]]:
     """(entry, fs, package info): `compile(pkg)` and `compile(None, pkg)` use the package's entrypoint."""
     if fs is None and isinstance(entry, PackageFS):
         entry, fs = None, entry
@@ -190,30 +209,32 @@ def _target(entry, fs):
     return _entry(entry), fs, None
 
 
-def _run(entry, fs, inputs, limits, data, **kw) -> dict:
+def _run(entry: Any, fs: Any, inputs: Any, limits: Optional[Mapping[str, int]], data: JsonDict, **kw: Any) -> JsonDict:
     if inputs is not None and not isinstance(inputs, Mapping):
         raise TypeError("inputs must be a dict")
-    entry, fs, package = _target(entry, fs)
-    return _i.compile_document(entry, _reader(fs), dict(inputs) if inputs is not None else None,
-                               **kw, **_limits(limits), **data, package=package)
+    path, target, package = _target(entry, fs)
+    r: JsonDict = _i.compile_document(path, _reader(target), dict(inputs) if inputs is not None else None,
+                                      **kw, **_limits(limits), **data, package=package)
+    return r
 
 
-def _data(snapshot, observations, valuation, market, pins) -> dict:
+def _data(snapshot: Any, observations: Any, valuation: Any, market: Any, pins: Any) -> JsonDict:
     return {"snapshot": snapshot, "observations": observations, "valuation": valuation, "market": market, "pins": pins}
 
 
-def _values(raw) -> Tuple[DeclaredValue, ...]:
+def _values(raw: List[JsonDict]) -> Tuple[DeclaredValue, ...]:
     return tuple(DeclaredValue(**v) for v in raw)
 
 
-def _blocks(raw) -> Tuple[CalcBlock, ...]:
+def _blocks(raw: List[JsonDict]) -> Tuple[CalcBlock, ...]:
     return tuple(CalcBlock(b["path"], b["line"], b["source"], tuple(CalcValue(**v) for v in b["results"])) for b in raw)
 
 
-def compile(entry, fs=None, *, inputs: Optional[Mapping[str, Any]] = None, profile: str = "commonmark",
+def compile(entry: Entry, fs: Optional[FileSystem] = None, *, inputs: Optional[Mapping[str, Any]] = None, profile: str = "commonmark",
             calc_blocks: str = "remove", limits: Optional[Mapping[str, int]] = None, allow_plaintext: bool = False,
-            snapshot: Optional[list] = None, observations: Optional[list] = None, valuation: Optional[str] = None,
-            market: Optional[str] = None, pins: Optional[Mapping[str, Mapping[str, str]]] = None) -> Result:
+            snapshot: Optional[Sequence[JsonDict]] = None, observations: Optional[Sequence[Mapping[str, str]]] = None,
+            valuation: Optional[str] = None, market: Optional[str] = None,
+            pins: Optional[Mapping[str, Mapping[str, str]]] = None) -> Result:
     """Compile the document `entry` (root-relative) read from `fs` into portable Markdown.
 
     `inputs` are host values visible as `variables.<name>` (the top metadata layer; numbers as int or
@@ -233,24 +254,25 @@ def compile(entry, fs=None, *, inputs: Optional[Mapping[str, Any]] = None, profi
                   r["markdown"])
 
 
-def evaluate(entry, fs=None, *, inputs: Optional[Mapping[str, Any]] = None, limits: Optional[Mapping[str, int]] = None,
-             snapshot: Optional[list] = None, observations: Optional[list] = None, valuation: Optional[str] = None,
+def evaluate(entry: Entry, fs: Optional[FileSystem] = None, *, inputs: Optional[Mapping[str, Any]] = None,
+             limits: Optional[Mapping[str, int]] = None, snapshot: Optional[Sequence[JsonDict]] = None,
+             observations: Optional[Sequence[Mapping[str, str]]] = None, valuation: Optional[str] = None,
              market: Optional[str] = None, pins: Optional[Mapping[str, Mapping[str, str]]] = None) -> Evaluation:
     """Like `compile`, but returns only the data (metadata, calc results, declared values); no Markdown."""
     r = _run(entry, fs, inputs, limits, _data(snapshot, observations, valuation, market, pins), markdown=False)
     return Evaluation(r["metadata"], tuple(map(tuple, r["provenance"])), _blocks(r["calc"]), _values(r["values"]))
 
 
-def validate_sources(entry, fs=None) -> Tuple[SourceDeclaration, ...]:
+def validate_sources(entry: Entry, fs: Optional[FileSystem] = None) -> Tuple[SourceDeclaration, ...]:
     """Every declared variable of the document's effective metadata (manifest and all metadata files),
     checked offline: schema, URL form, type and selection syntax. No I/O beyond reading the files."""
-    entry, fs, package = _target(entry, fs)
-    return tuple(SourceDeclaration(**d) for d in _i.validate_document_sources(entry, _reader(fs), package))
+    path, target, package = _target(entry, fs)
+    return tuple(SourceDeclaration(**d) for d in _i.validate_document_sources(path, _reader(target), package))
 
 
-def test_source(entry, fs=None, *, name: str, transport: Callable[[dict], dict], retrieved_at: str,
-                host_policy: Optional[dict] = None, library_policy: Optional[dict] = None,
-                allow_network: bool = True, headers: Optional[Mapping[str, str]] = None) -> dict:
+def test_source(entry: Entry, fs: Optional[FileSystem] = None, *, name: str, transport: Transport, retrieved_at: str,
+                host_policy: Optional[JsonDict] = None, library_policy: Optional[JsonDict] = None,
+                allow_network: bool = True, headers: Optional[Mapping[str, str]] = None) -> JsonDict:
     """One authorised retrieval of the declared variable `name` through the host's `transport` (E6.5).
 
     The network is allowed only if BOTH `host_policy` and `library_policy` say so; the document's requests
@@ -259,9 +281,10 @@ def test_source(entry, fs=None, *, name: str, transport: Callable[[dict], dict],
     """
     if not isinstance(name, str):
         raise TypeError("name must be a str")
-    entry, fs, package = _target(entry, fs)
-    return _i.test_document_source(entry, _reader(fs), name, host_policy, library_policy, transport, retrieved_at,
-                                   allow_network, headers, package)
+    path, target, package = _target(entry, fs)
+    r: JsonDict = _i.test_document_source(path, _reader(target), name, host_policy, library_policy, transport,
+                                          retrieved_at, allow_network, headers, package)
+    return r
 
 
-test_source.__test__ = False  # not a pytest test, despite the name
+setattr(test_source, "__test__", False)  # not a pytest test, despite the name

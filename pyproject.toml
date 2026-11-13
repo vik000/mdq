@@ -10,7 +10,7 @@ license = { text = "Apache-2.0" }
 dynamic = ["version"]   # taken from the Rust workspace version
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "hypothesis>=6", "pyyaml>=6", "markdown-it-py>=3", "linkify-it-py>=2", "pyrage>=1.1"]
+dev = ["pytest>=8", "hypothesis>=6", "pyyaml>=6", "markdown-it-py>=3", "linkify-it-py>=2", "pyrage>=1.1", "mypy>=1.10"]
 
 [tool.maturin]
 manifest-path = "crates/mdq-python/Cargo.toml"
@@ -32,3 +32,12 @@ markers = [
   "slow: long-running tests",
   "gap: depends on an open spec gap (use with xfail strict)",
 ]
+
+[tool.mypy]
+strict = true
+files = ["python/mdq"]
+
+# Unstable, deliberately untyped test hooks (re-exports of the compiled module).
+[[tool.mypy.overrides]]
+module = "mdq._internal"
+ignore_errors = true

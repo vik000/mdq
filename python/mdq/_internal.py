@@ -9,6 +9,7 @@ diagnostic_codes = _i.diagnostic_codes
 supported_profiles = _i.supported_profiles
 check_required = _i.check_required
 _panic_probe = _i._panic_probe
+_diagnostic_probe = _i._diagnostic_probe
 
 # E1.1 decimal arithmetic (strings in, canonical strings out)
 dec_canonical = _i.dec_canonical

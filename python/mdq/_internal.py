@@ -117,3 +117,7 @@ url_template_expand = _i.url_template_expand
 # E6.2 JSON Pointer selection and type checks
 json_pointer_select = _i.json_pointer_select
 value_type_check = _i.value_type_check
+
+# E6.3 URL and IP classification
+ip_is_blocked = _i.ip_is_blocked
+url_classify = _i.url_classify

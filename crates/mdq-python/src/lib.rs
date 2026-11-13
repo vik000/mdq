@@ -20,6 +20,7 @@ use mdq_core::refs;
 use mdq_core::rich;
 use mdq_core::source;
 use mdq_core::meta;
+use mdq_core::net;
 use mdq_core::paths;
 use mdq_core::diag::{Code, Diagnostic};
 use mdq_core::units;
@@ -952,6 +953,26 @@ fn value_type_check<'py>(
     Ok(d)
 }
 
+#[pyfunction]
+fn ip_is_blocked(address: &str) -> PyResult<bool> {
+    match net::parse_ip(address) {
+        Some(ip) => Ok(net::ip_is_blocked(&ip)),
+        None => Err(PyValueError::new_err("not an IP address literal")),
+    }
+}
+
+#[pyfunction]
+fn url_classify<'py>(py: Python<'py>, url: &str) -> PyResult<Bound<'py, PyDict>> {
+    let c = wrap(py, net::url_classify(url))?;
+    let d = PyDict::new(py);
+    d.set_item("scheme", "https")?;
+    d.set_item("host", c.host)?;
+    d.set_item("kind", c.kind)?;
+    d.set_item("port", c.port)?;
+    d.set_item("origin", c.origin)?;
+    Ok(d)
+}
+
 fn attrs_dict<'py>(py: Python<'py>, attrs: Vec<(String, String)>) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
     for (k, v) in attrs {
@@ -1145,6 +1166,8 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(url_template_expand, &internal)?)?;
     internal.add_function(wrap_pyfunction!(json_pointer_select, &internal)?)?;
     internal.add_function(wrap_pyfunction!(value_type_check, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(ip_is_blocked, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(url_classify, &internal)?)?;
     internal.add_function(wrap_pyfunction!(attrs_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_eval, &internal)?)?;

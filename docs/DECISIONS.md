@@ -2,6 +2,22 @@
 
 Per feature. Veto by editing or telling me. Test-plan gap rows (G-numbers) in `docs/TEST_PLAN.md` hold the full wording.
 
+## E6.3 URL and IP classification (G44, resolves G10)
+**Decisions**
+- CGNAT 100.64/10 blocked; also Azure 168.63.129.16, documentation, benchmark, reserved and 6to4-relay ranges.
+- IPv6: only 2000::/3 allowed; mapped, NAT64 and 6to4 follow the embedded IPv4.
+- Legacy IPv4 notations (decimal, octal, hex, short) are parsed WHATWG-style and classified as the address they mean.
+- Blocked names: single-label hosts, localhost, local, internal, localdomain, home.arpa, lan, corp, home (and subdomains).
+- Non-https scheme, credentials, blocked IP/name = MDQ_SECURITY_DENIED; malformed URL = MDQ_SOURCE_INVALID.
+- Diagnostics never echo any part of the URL.
+
+**Sacrifices**
+- IDN hosts rejected (give punycode); `%` in hosts rejected; empty port rejected.
+- `.example`, `.test`, `.invalid` are NOT blocked (spec examples use example.invalid).
+
+**Open**
+- Port policy (only 443?) belongs to E6.4.
+
 ## E6.2 JSON Pointer and type checks (G43)
 **Decisions**
 - Failed selection is MDQ_SOURCE_UNRESOLVED; bad pointer syntax or bad JSON is MDQ_SOURCE_INVALID; type mismatch is MDQ_SOURCE_TYPE_ERROR.

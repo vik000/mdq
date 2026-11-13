@@ -6,6 +6,8 @@
 
 use crate::blocks::{self, Kind};
 use crate::diag::{Code, Diagnostic};
+use crate::vars::{self, Scope};
+use crate::yaml::Yaml;
 
 const MAX_INPUT: usize = 16 * 1024 * 1024;
 pub const MAX_ATTRS: usize = 64;
@@ -275,4 +277,171 @@ pub fn container_parse(text: &str, first_line: u32) -> Res<Vec<Container>> {
         return Err(syntax(format!("container \"{}\" is not closed", top.node.name), top.node.line, 1));
     }
     Ok(roots)
+}
+
+// ---------------------------------------------------------------- evaluation (if / for)
+
+fn valid_name(name: &str, dotted: bool) -> bool {
+    let ok_seg = |g: &str| {
+        let mut ch = g.chars();
+        match ch.next() {
+            Some(f) if f.is_ascii_alphabetic() || f == '_' => ch.all(|x| x.is_ascii_alphanumeric() || x == '_'),
+            _ => false,
+        }
+    };
+    if dotted {
+        name.split('.').all(ok_seg)
+    } else {
+        ok_seg(name)
+    }
+}
+
+struct Ev<'t> {
+    c: &'t [char],
+    starts: &'t [usize],
+    first_line: u32,
+    iterations: usize,
+    max_iterations: usize,
+    size: usize,
+}
+
+impl<'t> Ev<'t> {
+    fn line_of(&self, pos: usize) -> u32 {
+        let idx = match self.starts.binary_search(&pos) {
+            Ok(i) => i,
+            Err(i) => i - 1,
+        };
+        self.first_line + idx as u32
+    }
+
+    fn put(&mut self, out: &mut String, s: &str) -> Res<()> {
+        self.size += s.len();
+        if self.size > vars::MAX_OUTPUT {
+            return Err(Diagnostic::new(Code::ResourceLimit, "evaluated output is too large"));
+        }
+        out.push_str(s);
+        Ok(())
+    }
+
+    fn seg(&mut self, a: usize, b: usize, scope: &Scope, out: &mut String) -> Res<()> {
+        if a < b {
+            let s: String = self.c[a..b].iter().collect();
+            let r = vars::interpolate_with(&s, scope, self.line_of(a))?;
+            self.put(out, &r)?;
+        }
+        Ok(())
+    }
+
+    fn range<'v>(&mut self, a: usize, b: usize, nodes: &[Container], scope: &mut Scope<'v>, out: &mut String) -> Res<()> {
+        let mut pos = a;
+        for n in nodes {
+            self.seg(pos, n.start, scope, out)?;
+            self.node(n, scope, out)?;
+            pos = n.end;
+        }
+        self.seg(pos, b, scope, out)
+    }
+
+    fn check<'n>(&self, n: &'n Container, allowed: &[&str]) -> Res<Vec<&'n str>> {
+        for (k, _) in &n.attrs {
+            if !allowed.contains(&k.as_str()) {
+                return Err(syntax(format!("unknown attribute \"{}\" on container \"{}\"", k, n.name), n.line, 1));
+            }
+        }
+        let mut vals = Vec::new();
+        for k in allowed {
+            match n.attrs.iter().find(|(key, _)| key == k) {
+                Some((_, v)) => vals.push(v.as_str()),
+                None => {
+                    return Err(syntax(format!("container \"{}\" requires the attribute \"{}\"", n.name, k), n.line, 1));
+                }
+            }
+        }
+        Ok(vals)
+    }
+
+    fn resolve<'v>(&self, n: &Container, key: &str, name: &str, scope: &Scope<'v>) -> Res<&'v Yaml> {
+        if !valid_name(name, true) {
+            return Err(syntax(
+                format!("the \"{}\" attribute must be a dotted variable name, found \"{}\"", key, name),
+                n.line,
+                1,
+            ));
+        }
+        match scope.get(name) {
+            Some(v) => Ok(v),
+            None => Err(Diagnostic::new(Code::UndefinedVariable, format!("undefined variable \"{}\"", name))
+                .at_position(n.line, 1)),
+        }
+    }
+
+    fn node<'v>(&mut self, n: &Container, scope: &mut Scope<'v>, out: &mut String) -> Res<()> {
+        if n.name == "if" {
+            let a = self.check(n, &["var", "equals"])?;
+            let v = self.resolve(n, "var", a[0], scope)?;
+            let got = match vars::format_scalar(v) {
+                Ok(t) => t,
+                Err(d) => {
+                    return Err(Diagnostic::new(d.code, format!("{} (variable \"{}\")", d.message, a[0]))
+                        .at_position(n.line, 1));
+                }
+            };
+            if got == a[1] {
+                self.range(n.body_start, n.body_end, &n.children, scope, out)?;
+            }
+        } else if n.name == "for" {
+            let a = self.check(n, &["each", "as"])?;
+            let v = self.resolve(n, "each", a[0], scope)?;
+            let items = match v {
+                Yaml::Seq(items) => items,
+                other => {
+                    return Err(Diagnostic::new(
+                        Code::MetadataError,
+                        format!("\"{}\" is not a list (found {})", a[0], other.kind()),
+                    )
+                    .at_position(n.line, 1));
+                }
+            };
+            if !valid_name(a[1], false) {
+                return Err(syntax(
+                    format!("the \"as\" attribute must be a plain identifier, found \"{}\"", a[1]),
+                    n.line,
+                    1,
+                ));
+            }
+            for item in items {
+                self.iterations += 1;
+                if self.iterations > self.max_iterations {
+                    return Err(Diagnostic::new(
+                        Code::ResourceLimit,
+                        format!("more than {} loop iterations", self.max_iterations),
+                    )
+                    .at_position(n.line, 1));
+                }
+                scope.push(a[1], item);
+                let r = self.range(n.body_start, n.body_end, &n.children, scope, out);
+                scope.pop();
+                r?;
+            }
+        } else {
+            let head: String = self.c[n.start..n.body_start].iter().collect();
+            self.put(out, &head)?;
+            self.range(n.body_start, n.body_end, &n.children, scope, out)?;
+            let tail: String = self.c[n.body_end..n.end].iter().collect();
+            self.put(out, &tail)?;
+        }
+        Ok(())
+    }
+}
+
+/// Resolve `if`/`for` containers and interpolate everything else (see G31).
+pub fn container_eval(text: &str, vars_yaml: &Yaml, first_line: u32, max_iterations: usize) -> Res<String> {
+    let tree = container_parse(text, first_line)?;
+    let c: Vec<char> = text.chars().collect();
+    let (starts, _ends) = blocks::line_bounds(&c);
+    let mut ev = Ev { c: &c, starts: &starts, first_line, iterations: 0, max_iterations, size: 0 };
+    let mut scope = Scope::new(vars_yaml);
+    let mut out = String::with_capacity(text.len());
+    ev.range(0, c.len(), &tree, &mut scope, &mut out)?;
+    Ok(out)
 }

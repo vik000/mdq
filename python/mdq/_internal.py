@@ -65,3 +65,4 @@ utf8_decode = _i.utf8_decode
 # E3.3 attribute lists and fenced containers
 attrs_parse = _i.attrs_parse
 container_parse = _i.container_parse
+container_eval = _i.container_eval

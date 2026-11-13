@@ -15,7 +15,7 @@ use crate::yaml::Yaml;
 type Res<T> = Result<T, Diagnostic>;
 
 const MAX_INPUT: usize = 16 * 1024 * 1024;
-const MAX_OUTPUT: usize = 64 * 1024 * 1024;
+pub(crate) const MAX_OUTPUT: usize = 64 * 1024 * 1024;
 const MAX_NUMBER_DIGITS: usize = 400;
 const MAX_EXPONENT: i64 = 400;
 
@@ -633,9 +633,51 @@ pub fn directives(text: &str, first_line: u32) -> Res<Vec<Directive>> {
     }
 }
 
+/// Variables plus the loop variables in scope (innermost last). A loop variable hides every
+/// variable of the same first name segment.
+pub struct Scope<'a> {
+    vars: &'a Yaml,
+    loops: Vec<(String, &'a Yaml)>,
+}
+
+impl<'a> Scope<'a> {
+    pub fn new(vars: &'a Yaml) -> Scope<'a> {
+        Scope { vars, loops: Vec::new() }
+    }
+
+    pub fn push(&mut self, name: &str, value: &'a Yaml) {
+        self.loops.push((name.to_string(), value));
+    }
+
+    pub fn pop(&mut self) {
+        self.loops.pop();
+    }
+
+    pub fn get(&self, name: &str) -> Option<&'a Yaml> {
+        let (first, rest) = match name.split_once('.') {
+            Some((a, b)) => (a, Some(b)),
+            None => (name, None),
+        };
+        for (n, v) in self.loops.iter().rev() {
+            if n == first {
+                return match rest {
+                    None => Some(*v),
+                    Some(r) => lookup(v, r),
+                };
+            }
+        }
+        lookup(self.vars, name)
+    }
+}
+
 /// Expand `{{name}}` references in `text` (the Markdown body; `first_line` is
 /// the 1-based line number of its first line, for diagnostics).
 pub fn interpolate(text: &str, vars: &Yaml, first_line: u32) -> Res<String> {
+    interpolate_with(text, &Scope::new(vars), first_line)
+}
+
+/// `interpolate` with loop variables in scope.
+pub fn interpolate_with(text: &str, scope: &Scope, first_line: u32) -> Res<String> {
     if text.len() > MAX_INPUT {
         return Err(err(Code::ResourceLimit, "input is larger than 16 MiB"));
     }
@@ -646,7 +688,7 @@ pub fn interpolate(text: &str, vars: &Yaml, first_line: u32) -> Res<String> {
     let mut pos = 0usize;
     for d in found {
         let at = |dd: Diagnostic| dd.at_position(d.line, d.column);
-        let value = match lookup(vars, &d.name) {
+        let value = match scope.get(&d.name) {
             Some(v) => v,
             None => {
                 return Err(err(Code::UndefinedVariable, format!("undefined variable \"{}\"", d.name))

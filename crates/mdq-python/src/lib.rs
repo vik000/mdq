@@ -521,6 +521,22 @@ fn md_regions<'py>(py: Python<'py>, text: &str) -> PyResult<Vec<Bound<'py, PyDic
     Ok(out)
 }
 
+#[pyfunction]
+#[pyo3(signature = (text, variables, first_line=1, max_iterations=10000))]
+fn container_eval(
+    py: Python<'_>,
+    text: &str,
+    variables: &Bound<'_, PyAny>,
+    first_line: u32,
+    max_iterations: usize,
+) -> PyResult<String> {
+    if !variables.is_instance_of::<PyDict>() {
+        return Err(PyTypeError::new_err("variables must be a dict"));
+    }
+    let y = py_to_yaml(py, variables, 0)?;
+    wrap(py, containers::container_eval(text, &y, first_line, max_iterations))
+}
+
 fn attrs_dict<'py>(py: Python<'py>, attrs: Vec<(String, String)>) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
     for (k, v) in attrs {
@@ -710,6 +726,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(directive_scan, &internal)?)?;
     internal.add_function(wrap_pyfunction!(attrs_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_parse, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(container_eval, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_canonical, &internal)?)?;
     internal.add_function(wrap_pyfunction!(dim_combine, &internal)?)?;
     m.add_submodule(&internal)?;

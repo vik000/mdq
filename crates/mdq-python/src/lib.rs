@@ -29,9 +29,11 @@ use mdq_core::utf8;
 use mdq_core::vars;
 use mdq_core::version;
 use mdq_core::yaml;
+use mdq_core::inflate;
+use mdq_core::zip;
 use pyo3::exceptions::{PyException, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyDict, PyInt, PyList, PyString, PyTuple};
+use pyo3::types::{PyBool, PyBytes, PyDict, PyInt, PyList, PyString, PyTuple};
 
 // Python-visible exception `mdq.MdqError` (attributes are set in `to_py_err`).
 pyo3::create_exception!(mdq, MdqError, PyException);
@@ -1439,6 +1441,90 @@ fn diagnostic_codes() -> Vec<&'static str> {
     Code::ALL.iter().map(|c| c.as_str()).collect()
 }
 
+// ---- E7.1 hostile-zip reader (G47) ----
+
+/// Internal: CRC-32 of `data` (same value as `zlib.crc32`).
+#[pyfunction]
+fn crc32(data: &[u8]) -> u32 {
+    inflate::crc32(data)
+}
+
+/// Internal: raw DEFLATE decompression with an output limit. `_internal.inflate` checks that
+/// `max_size` is a non-negative int (not a bool) before calling this.
+#[pyfunction]
+#[pyo3(name = "inflate")]
+fn inflate_hook<'py>(py: Python<'py>, data: &[u8], max_size: u64) -> PyResult<Bound<'py, PyBytes>> {
+    let out = wrap(py, inflate::inflate(data, usize::try_from(max_size).unwrap_or(usize::MAX)))?;
+    Ok(PyBytes::new(py, &out))
+}
+
+/// Convert the optional `limits` dict into core limits. Not a dict: TypeError; a non-int or
+/// bool value: TypeError; unknown key, duplicate or value < 1: ValueError.
+fn zip_limits_arg(limits: Option<&Bound<'_, PyAny>>) -> PyResult<zip::ZipLimits> {
+    let obj = match limits {
+        None => return Ok(zip::ZipLimits::defaults()),
+        Some(o) if o.is_none() => return Ok(zip::ZipLimits::defaults()),
+        Some(o) => o,
+    };
+    let dict = obj.downcast::<PyDict>().map_err(|_| PyTypeError::new_err("limits must be a dict or None"))?;
+    let mut pairs = Vec::new();
+    for (k, v) in dict.iter() {
+        let key: String = k.extract().map_err(|_| PyTypeError::new_err("zip limit names must be str"))?;
+        if v.is_instance_of::<PyBool>() || !v.is_instance_of::<PyInt>() {
+            return Err(PyTypeError::new_err("zip limit values must be int"));
+        }
+        // Negative or huge ints: below 1 is a ValueError, above u64 is clamped like any large value.
+        let value: u64 = match v.extract::<i128>() {
+            Ok(n) if n < 1 => return Err(PyValueError::new_err("zip limit values must be at least 1")),
+            Ok(n) => u64::try_from(n).unwrap_or(u64::MAX),
+            Err(_) => u64::MAX,
+        };
+        pairs.push((key, value));
+    }
+    zip::ZipLimits::from_pairs(&pairs).map_err(PyValueError::new_err)
+}
+
+fn zip_limits_dict<'py>(py: Python<'py>, l: &zip::ZipLimits) -> PyResult<Bound<'py, PyDict>> {
+    let d = PyDict::new(py);
+    for (k, v) in l.as_pairs() {
+        d.set_item(k, v)?;
+    }
+    Ok(d)
+}
+
+/// Internal: the effective zip limits (defaults, host values clamped to the hard caps).
+#[pyfunction]
+#[pyo3(signature = (limits=None))]
+fn zip_limits<'py>(py: Python<'py>, limits: Option<&Bound<'py, PyAny>>) -> PyResult<Bound<'py, PyDict>> {
+    let l = zip_limits_arg(limits)?;
+    zip_limits_dict(py, &l)
+}
+
+/// Internal: read and verify a whole zip archive given as bytes.
+#[pyfunction]
+#[pyo3(signature = (data, limits=None))]
+fn zip_read<'py>(py: Python<'py>, data: &Bound<'py, PyAny>, limits: Option<&Bound<'py, PyAny>>) -> PyResult<Bound<'py, PyDict>> {
+    // Only real `bytes`: PyO3 would also accept other buffer-like objects for &[u8].
+    let bytes = data.downcast::<PyBytes>().map_err(|_| PyTypeError::new_err("data must be bytes"))?;
+    let l = zip_limits_arg(limits)?;
+    let a = wrap(py, zip::zip_read(bytes.as_bytes(), &l))?;
+    let members = PyList::empty(py);
+    for m in &a.members {
+        let d = PyDict::new(py);
+        d.set_item("name", &m.name)?;
+        d.set_item("method", m.method.as_str())?;
+        d.set_item("size", m.size)?;
+        d.set_item("compressed_size", m.compressed_size)?;
+        d.set_item("crc32", m.crc32)?;
+        d.set_item("data", PyBytes::new(py, &m.data))?;
+        members.append(d)?;
+    }
+    let out = PyDict::new(py);
+    out.set_item("members", members)?;
+    out.set_item("directories", a.directories)?;
+    Ok(out)
+}
+
 /// Internal: profiles this build implements.
 #[pyfunction]
 fn supported_profiles() -> Vec<&'static str> {
@@ -1514,6 +1600,10 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     internal.add_function(wrap_pyfunction!(snapshot_apply, &internal)?)?;
     internal.add_function(wrap_pyfunction!(url_join_hook, &internal)?)?;
     internal.add_function(wrap_pyfunction!(sha256_hex, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(crc32, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(inflate_hook, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(zip_limits, &internal)?)?;
+    internal.add_function(wrap_pyfunction!(zip_read, &internal)?)?;
     internal.add_function(wrap_pyfunction!(attrs_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_parse, &internal)?)?;
     internal.add_function(wrap_pyfunction!(container_eval, &internal)?)?;

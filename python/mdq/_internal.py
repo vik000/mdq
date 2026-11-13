@@ -140,3 +140,19 @@ source_fetch = _i.source_fetch
 snapshot_apply = _i.snapshot_apply
 url_join = _i.url_join
 sha256_hex = _i.sha256_hex
+
+# E7.1 hostile-zip reader
+crc32 = _i.crc32
+
+
+def inflate(data, max_size):
+    # Same rule as policy_decide: bools and negatives are TypeError, not PyO3's OverflowError.
+    if isinstance(max_size, bool) or not isinstance(max_size, int) or max_size < 0:
+        raise TypeError("max_size must be a non-negative int")
+    if not isinstance(data, bytes):
+        raise TypeError("data must be bytes")
+    return _i.inflate(data, max_size)
+
+
+zip_limits = _i.zip_limits
+zip_read = _i.zip_read

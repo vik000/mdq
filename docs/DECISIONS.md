@@ -2,6 +2,26 @@
 
 Per feature. Veto by editing or telling me. Test-plan gap rows (G-numbers) in `docs/TEST_PLAN.md` hold the full wording.
 
+## E7.1 hostile-zip reader (G47)
+**Decisions**
+- Own DEFLATE decoder (RFC 1951, puff-style) and own CRC-32: no new dependency; zlib raw inflate is the differential oracle. Output is bounded while decoding.
+- Strict subset: methods stored and deflate only; data descriptors allowed but must equal the central directory; zip64, multi-disk, zip encryption and unknown flags are MDQ_UNSUPPORTED_FEATURE.
+- Names: UTF-8 (bit 11) or plain ASCII; no cp437 guessing. Absolute, `..`, backslash and `:` are MDQ_SECURITY_DENIED; empty/`.` segments and control characters MDQ_INVALID_SYNTAX.
+- Collisions: duplicates compared in NFC, plus case-insensitive collisions and file-vs-parent-directory conflicts are MDQ_SECURITY_DENIED (they would overwrite each other on macOS/Windows), although the MDQ VFS itself is case-sensitive.
+- Symlinks and special files are refused whenever the high 16 bits of external_attr carry a Unix type (the "made by" host byte is not trusted).
+- The local records must tile the archive exactly: this rejects prefix data (self-extractors), gaps and overlapping members (non-recursive bombs).
+- Limits: defaults 1000 entries, 16 MiB per member, 64 MiB total, 64 MiB archive, ratio 100:1 above 1 MiB; caps 10000 / 64 / 256 / 256 MiB / 100; host values above a cap are clamped (as in E6.4). All size checks use declared sizes before decompressing; decoding then enforces them.
+- Messages name members by position only, never by (hostile) name. Nested zips are returned as opaque bytes, never opened.
+- Directory entries are listed separately and carry no data.
+
+**Sacrifices**
+- Archives over 4 GiB or 65,535 entries (zip64) cannot be read.
+- Archives from writers that add non-TLV padding to extra fields (e.g. some APK aligners) are rejected.
+- Bit-by-bit Huffman decoding: simple to check, slower than zlib (fine at these limits).
+
+**Open**
+- Manifest, `features`, entrypoint (E7.2); age and per-member encryption (E7.3, spec gap 4).
+
 ## E6.5 resolver, fake transport and snapshots (G46)
 **Decisions**
 - Transport protocol: a callable, dict in / dict out (`resolve`, `get`); in Rust a `Transport` trait. Unknown response keys are ignored.

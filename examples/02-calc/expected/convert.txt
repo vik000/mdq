@@ -1,0 +1,3 @@
+$ mdq build convert.md --root examples/02-calc --observations examples/02-calc/rates.json --valuation 2026-11-14T00:00:00Z
+The invoice is 628.716 USD.
+[exit 0]

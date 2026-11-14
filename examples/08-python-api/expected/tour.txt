@@ -1,0 +1,9 @@
+$ python examples/08-python-api/example.py
+1. SourceUnresolvedError MDQ_SOURCE_UNRESOLVED at doc.md
+2. fetched 42.5 USD at 2026-11-14T09:00:00Z
+3. Interest: 700, price 42.5 USD.
+   calc: interest = 700 Decimal line 16
+4. [('price', Decimal('42.5'), 'USD')]
+5. MDQ_CALC_ERROR bad.md:2:7 division by zero
+6. [('price', 'number', 'USD', 'https://example.invalid/price')]
+[exit 0]

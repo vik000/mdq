@@ -1,0 +1,3 @@
+$ mdq build report.md --root examples/06-data-and-sources --input quarter=Q4
+report.md: MDQ_SOURCE_UNRESOLVED: no snapshot entry for 'share_price'
+[exit 1]

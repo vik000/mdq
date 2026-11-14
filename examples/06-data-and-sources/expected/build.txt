@@ -1,0 +1,7 @@
+$ mdq build report.md --root examples/06-data-and-sources --input quarter=Q4 --snapshot examples/06-data-and-sources/snapshot.json
+# Q4 report
+
+Team lead: Ada (5 people).
+
+Share price: 187.25 USD; 100 shares are worth 18725 USD.
+[exit 0]

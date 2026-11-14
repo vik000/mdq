@@ -1,0 +1,3 @@
+$ mdq build convert.md --root examples/02-calc
+convert.md:6:16: MDQ_SOURCE_UNRESOLVED: no valuation timestamp or observation id was supplied to convert EUR to USD
+[exit 1]

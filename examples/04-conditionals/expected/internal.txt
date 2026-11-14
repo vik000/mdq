@@ -1,0 +1,14 @@
+$ mdq build plan.md --root examples/04-conditionals --input audience=internal
+# Plan
+
+Internal note: budget numbers are confidential.
+
+Only for the team.
+
+- Step: Design
+- Step: Build
+- Step: Ship
+
+- Ada owns maths
+- Grace owns compilers
+[exit 0]

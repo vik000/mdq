@@ -1,0 +1,9 @@
+$ mdq build --package examples/07-package/guide.mdq.age --identity examples/07-package/key.txt --allow-plaintext
+# Packaged guide
+
+## Setup
+
+Unpack and read.
+
+Floor area: 12 m2.
+[exit 0]

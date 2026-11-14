@@ -1,0 +1,7 @@
+format: mdq
+version: '0.1'
+entrypoint: guide.md
+features: [core, calc, package]
+title: Packaged guide
+security:
+  network: deny

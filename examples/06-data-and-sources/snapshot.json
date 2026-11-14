@@ -1,0 +1,15 @@
+[
+  {
+    "name": "share_price",
+    "type": "number",
+    "value": 187.25,
+    "unit": "USD",
+    "retrieved_at": "2026-11-14T09:00:00Z",
+    "source": {
+      "kind": "http",
+      "named": "quotes",
+      "origin": "https://example.invalid:443",
+      "key": "9dd0d94aed0b76ae7e1b3b540410c13088f016ae5d717f418f722cdfca78176b"
+    }
+  }
+]

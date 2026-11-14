@@ -1,0 +1,25 @@
+$ mdq build notes.md --root examples/05-rich
+# Field notes
+
+> **Warning**
+>
+> Check the instruments before launch.
+
+This is important, and the energy is `E = mc^2`.[^1]
+
+As shown by (Hopper 1952), compilers help.
+
+## Raw measurements
+
+Two readings: 3.1 and 3.2.
+
+Left side.
+
+Right side.
+
+[^1]: Einstein, 1905.
+
+## References
+
+- Hopper, Grace (1952). The Education of a Computer.
+[exit 0]

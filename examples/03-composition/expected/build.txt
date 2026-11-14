@@ -1,0 +1,25 @@
+$ mdq build book/book.md --root examples/03-composition
+# The book (Orbit handbook, edition 2, draft)
+
+- [The book (Orbit handbook, edition 2, draft)](#the-book-orbit-handbook-edition-2-draft)
+  - [Why orbits](#why-orbits)
+  - [Highlights](#highlights)
+  - [Key numbers](#key-numbers)
+
+## Why orbits
+
+Orbits are predictable. ![Diagram](chapters/images/orbit.png)
+
+<a id="why"></a>A paragraph worth linking to.
+
+## Highlights
+
+## Key numbers
+
+* Low Earth orbit: about 400 km.
+
+
+> <a id="quote"></a>Gravity is a habit that is hard to shake off.
+
+See [the motivation](#why-orbits) and [Glossary](appendix.md#glossary).
+[exit 0]

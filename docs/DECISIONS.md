@@ -22,6 +22,20 @@ Per feature. Veto by editing or telling me. Test-plan gap rows (G-numbers) in `d
 **Open**
 - Per-member encryption layout (spec gap 4): strict xfail `test_per_member_encryption_layout`.
 
+## Examples and cheatsheet (G59)
+**Decisions**
+- Examples are small runnable projects with their exact output recorded as terminal transcripts; a test reruns them all, so they cannot drift from the library.
+- The cheatsheet is generated, never hand-edited: each snippet's output is produced by the library at build time (the old hand-written page had a `{{calc.total}}` without a calc block and a manifest without `package`). A test fails when it is stale.
+- Generated packages (`guide.mdq`, `guide.mdq.age`, `key.txt`) are not committed: encryption is randomised, and the demo key must not look like a real one.
+- Cheatsheet snippets avoid values at the start of a line, so the open G26 escaping question (`7.5` -> `7\.5`) does not show up as if it were intended behaviour.
+
+## Cross-cutting: CI (G58) — decisions taken before implementation
+**Decisions**
+- Tests on every push/PR to master: Ubuntu x Python 3.9-3.13, plus macOS and Windows on 3.12; `HYPOTHESIS_PROFILE=ci`; also mypy --strict and clippy.
+- Wheels with PyO3/maturin-action (abi3: one wheel per platform for every Python >= 3.9): Linux x86_64 + aarch64 (manylinux), macOS x86_64 + arm64, Windows x64, plus the sdist; each runs `scripts/wheel_smoke.py` where the runner can execute it.
+- Wheel builds on version tags (`v*`) and manual dispatch, uploaded as artifacts; nothing is published to PyPI.
+- Before the first push, the suite is run locally on Python 3.9, 3.10, 3.11 and 3.13 (uv-managed interpreters, in uv's cache).
+
 ## Fix: references, block anchors, duplicate IDs (G57; BUG-1, BUG-2, BUG-3 of G56)
 **Decisions**
 - BUG-1: `[[...]]` reference links are implemented as spec 3/3.1 defines them: `[[path.md]]`, `[[path.md#Heading]]`, `[[path.md#^id]]`, `|Label`; an empty path means the containing file. A target rendered in the output becomes `[Label](#anchor)` (its first rendered occurrence); default label = heading text, block ID or the path as written. Unknown heading/block: MDQ_UNRESOLVED_REFERENCE; missing file: MDQ_MISSING_IMPORT; never in code or HTML; `\[[` stays literal; `[[toc]]` keeps its meaning.

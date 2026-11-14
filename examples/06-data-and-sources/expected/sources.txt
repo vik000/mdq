@@ -1,0 +1,4 @@
+$ mdq sources report.md --root examples/06-data-and-sources
+quarter	string	-	host	-
+share_price	number	USD	http	https://example.invalid/quotes/ACME
+[exit 0]

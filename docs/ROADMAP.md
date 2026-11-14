@@ -1,9 +1,9 @@
 # MDQ Library — Roadmap
 
-Updated with every commit. Estimates are in sessions (one session = one feature cycle: Rust, shim check, tests,
-commit message), rough, about ±50%. Feature definitions and tests: `docs/TEST_PLAN.md` section 4.
+Updated with every commit. Estimates are in sessions (one session = one feature cycle: Rust, tests, docs,
+commit message; about 25–40 minutes at the measured pace), rough, about ±50%. Feature definitions and tests: `docs/TEST_PLAN.md` section 4.
 
-**Last update:** G57 references, block anchors, duplicate IDs built natively; BUG-1..3 fixed (5693 passed, 2 opt-in skips, 4 strict xfails).
+**Last update:** examples (8 projects, 19 recorded transcripts) and a generated cheatsheet built (5698 passed); CI paused (3.10-3.13 green locally, 3.9 stubtest issue).
 
 ## Status
 
@@ -19,10 +19,10 @@ commit message), rough, about ±50%. Feature definitions and tests: `docs/TEST_P
 | 6 Sources and policy (F16–F19) | done | E6.1 declarations and URL templates ✔, E6.2 JSON Pointer and types ✔, E6.3 URL/IP classification ✔, E6.4 policy ✔, E6.5 resolver, fake transport and snapshots ✔ | | 0 |
 | 7 Packages and encryption (F20, F21) | done | E7.1 hostile-zip reader ✔, E7.2 manifest and `package_open` ✔, E7.3 age (X25519 + passphrase, pyrage-verified) ✔ | c04ca23 (E7.1), 1f8c87b (E7.2 + E5.2a fix), fd299f6 (E7.3) | 0 |
 | 8 API, CLI, packaging (F25, F26) | done | E8.1a `compile`/`evaluate`, MemoryFS/DirectoryFS ✔, E8.1b variable files, bibliographies, snapshots, FX ✔, E8.1c PackageFS, allow_plaintext, `validate_sources`, `test_source` ✔, E8.2 exception hierarchy, py.typed + stubs (mypy --strict, stubtest), threads, memory ✔, E8.3 CLI (build/check/sources, exit codes, JSON schema) ✔, E8.4 wheel smoke test (3.12 and 3.14 arm64; matrix in CI) ✔ | c14db94 (E8.1a), fa0ede4 (E8.1b), bab1932 (E8.1c), 82ca2c3 (E8.2), ab1c658 (E8.3), d2de5d8 (E8.4) | 0 |
-| Cross-cutting | in progress | sdist fix (`spec/units.tsv` in the sdist, wheel from sdist smoke-tested) ✔, rule ledger (172 rules) + 155 conformance fixtures + CLI parity ✔, CI (incl. `HYPOTHESIS_PROFILE=ci`), Rust coverage | 02070f9 (sdist), aa3c574 (ledger) | 1.5 |
-| **Total** | | | | **about 1.5 (+ the BUG fixes)** |
+| Cross-cutting | in progress | sdist fix (`spec/units.tsv` in the sdist, wheel from sdist smoke-tested) ✔, rule ledger (172 rules) + 155 conformance fixtures + CLI parity ✔, ledger bugs fixed: reference links, block anchors, duplicate block IDs (G57, E8.1d) ✔, examples + generated cheatsheet (G59) ✔, CI (in progress), Rust coverage | 02070f9 (sdist), aa3c574 (ledger), c831a5b (G57) | 1.5 |
+| **Total** | | | | **about 1.5** |
 
-At the pace so far (29 commits for Epics 0–6), the remaining 1.5 sessions plus the bug fixes are roughly 2–4 working days; build-error rounds add to that.
+Measured pace: 30 commits on 2026-11-13 between 10:27 and 22:28, i.e. one feature cycle every 25–40 minutes. The remaining 1.5 sessions (CI and Rust coverage) are about 1–2 hours of work; CI adds wall-clock waiting (matrix runs take minutes, cibuildwheel wheels 30–60 minutes per round), so allow a few rounds if the first runs fail.
 
 ## Open decisions
 
@@ -53,6 +53,6 @@ At the pace so far (29 commits for Epics 0–6), the remaining 1.5 sessions plus
    a. ~~sdist fix~~ done.
    b. ~~Conformance fixtures and rule ledger~~ done.
    b2. ~~BUG-1..3 and the missing paths~~ done (G57); the `:::if` line waits for G50.
-   c. CI: test matrix 3.9-3.13, `HYPOTHESIS_PROFILE=ci`, cibuildwheel wheels for Linux/macOS/Windows, the wheel smoke test on each.
+   c. CI (paused): local run green on 3.10-3.13; 3.9: stubtest misreads typing names imported into `mdq._api`/`mdq.cli` (fix or skip stubtest on 3.9). Then: test matrix 3.9-3.13, `HYPOTHESIS_PROFILE=ci`, cibuildwheel wheels for Linux/macOS/Windows, the wheel smoke test on each.
    d. Rust line coverage of `mdq-core` from the Python tests (target 95 %, uncovered lines reviewed).
 2. The open decisions above (several need only your answer). G16 still open.

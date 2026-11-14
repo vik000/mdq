@@ -1,0 +1,3 @@
+$ mdq build --package examples/07-package/guide.mdq.age --identity examples/07-package/key.txt
+MDQ_SECURITY_DENIED: compiling an encrypted package produces plaintext: the host must allow it (allow_plaintext)
+[exit 4]

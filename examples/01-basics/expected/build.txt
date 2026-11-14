@@ -1,0 +1,9 @@
+$ mdq build report.md --root examples/01-basics
+# Quarterly report
+
+Written by Ada Lovelace for the Analytical Engines team.
+
+Hello, colleague! A value is inserted as text: \*not\* emphasised.
+
+Write `\{{` to keep a literal \{{brace}}. Code is never touched: `{{title}}`.
+[exit 0]

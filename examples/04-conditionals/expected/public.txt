@@ -1,0 +1,11 @@
+$ mdq build plan.md --root examples/04-conditionals
+# Plan
+
+
+- Step: Design
+- Step: Build
+- Step: Ship
+
+- Ada owns maths
+- Grace owns compilers
+[exit 0]

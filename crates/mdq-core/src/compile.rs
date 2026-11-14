@@ -33,7 +33,9 @@ use crate::fx::FxContext;
 use crate::imports::{import_expand, Expanded, Limits};
 use crate::meta::{cascade_values, Cascade, Layer, Merged};
 use crate::paths::path_normalise;
-use crate::refs::strip_block_ids;
+use crate::refs;
+use crate::xref;
+use std::cell::RefCell;
 use crate::policy::{self, PVal};
 use crate::resolver::{self, FetchError, Fetched, SVal, Transport};
 use crate::source::Declared;
@@ -113,6 +115,29 @@ const RESERVED: [&str; 2] = ["document", "calc"];
 
 fn meta_err(msg: impl Into<String>) -> Diagnostic {
     Diagnostic::new(Code::MetadataError, msg)
+}
+
+/// The text with every container fence line (3+ colons at column zero, G30) made empty.
+fn blank_fence_lines(text: &str) -> String {
+    text.split_inclusive('\n')
+        .map(|line| {
+            let body = line.trim_end_matches(['\n', '\r']);
+            if body.starts_with(":::") {
+                &line[body.len()..] // keep only the line terminator
+            } else {
+                line
+            }
+        })
+        .collect()
+}
+
+/// Attach the file of a metadata layer (from provenance) to a diagnostic without a path.
+/// `<inputs>` is the host's layer, not a file: it is not attached.
+fn with_layer(d: Diagnostic, layer: Option<&str>) -> Diagnostic {
+    match layer {
+        Some(l) if !l.starts_with('<') => in_file(d, l),
+        _ => d,
+    }
 }
 
 fn in_file(mut d: Diagnostic, path: &str) -> Diagnostic {
@@ -331,7 +356,10 @@ pub fn compile(entry: &str, read: Read<'_>, inputs: &Yaml, snapshot: &[SVal], fx
         _ => None,
     };
     let merged = cascade_values(&cas, bottom_ref, top.as_ref().map(|t| ("<inputs>", t)))?;
-    check_versions(&merged.value)?;
+    check_versions(&merged.value).map_err(|d| {
+        let layer = data::layer_of(&merged.provenance, "/mdq").or_else(|| data::layer_of(&merged.provenance, "/features"));
+        with_layer(d, layer)
+    })?;
     let values = data::resolve(&decls, snapshot, &host_values).map_err(|d| data::locate_declared(d, &decls, &files_only.provenance))?;
     check_units(&values)?;
     let mut vars = match get(&merged.value, "variables") {
@@ -350,32 +378,59 @@ pub fn compile(entry: &str, read: Read<'_>, inputs: &Yaml, snapshot: &[SVal], fx
             slot.1 = vars.clone();
         }
     }
-    let (scope, calc_in) = scope_and_inputs(&effective, &vars)?;
+    let (scope, calc_in) = scope_and_inputs(&effective, &vars).map_err(|d| {
+        // A reserved name under `variables:` (`document`, `calc`): name the file that declared it.
+        let layer = RESERVED.iter().find_map(|r| {
+            d.message.contains(&format!("variables.{}", r)).then(|| data::layer_of(&merged.provenance, &format!("/variables/{}", r))).flatten()
+        });
+        with_layer(d, layer)
+    })?;
 
-    // 4. containers (calc deferred) per file, then imports of already-evaluated files.
-    let mut originals: HashMap<String, String> = HashMap::new();
+    // 4. containers (calc deferred) per file, then references and imports of evaluated files.
+    // `read` is shared by the import reader and the reference resolver: a RefCell checks at run time
+    // that the two never borrow it at the same moment (each borrow ends before the next starts).
+    let read_cell = RefCell::new(read);
+    let originals: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
+    originals.borrow_mut().insert(entry.clone(), text.clone());
+    let table: RefCell<Vec<xref::Reference>> = RefCell::new(Vec::new());
+    // Full text of a file (cached), for resolving reference targets.
+    let lookup = |p: &str| -> Res<Option<String>> {
+        if let Some(t) = originals.borrow().get(p) {
+            return Ok(Some(t.clone()));
+        }
+        let t = read_text(&mut **read_cell.borrow_mut(), p)?;
+        if let Some(t) = &t {
+            originals.borrow_mut().insert(p.to_string(), t.clone());
+        }
+        Ok(t)
+    };
     let eval_file = |path: &str, text: &str| -> Res<String> {
         let sp = frontmatter::split(text).map_err(|d| in_file(d, path))?;
+        // Block IDs must be unique in each source document (spec 3), checked on the source itself.
+        // Container fences split the source into separate blocks (G31), so blank them for this check
+        // (line numbers are unchanged); otherwise `b ^p1` followed by `:::` would not end a paragraph.
+        refs::build(&blank_fence_lines(sp.body), sp.body_line).map_err(|d| in_file(d, path))?;
         let body = container_eval_deferred(sp.body, &scope, "calc", sp.body_line, opts.max_iterations)
             .map_err(|d| in_file(d, path))?;
+        let body = xref::mark_references(&body, sp.body_line, path, &mut |p| lookup(p), &mut table.borrow_mut())?;
         // Keep the original frontmatter lines so `import_expand` counts file lines correctly.
         let t = text.strip_prefix('\u{feff}').unwrap_or(text);
         let head = &t[..t.len() - sp.body.len()];
         Ok(format!("{}{}", head, body))
     };
     let root_eval = eval_file(&entry, &text)?;
-    originals.insert(entry.clone(), text.clone());
     let mut import_read = |p: &str| -> Res<Option<String>> {
-        match read_text(read, p)? {
+        let t = read_text(&mut **read_cell.borrow_mut(), p)?;
+        match t {
             None => Ok(None),
             Some(t) => {
-                let ev = eval_file(p, &t)?;
-                originals.insert(p.to_string(), t);
-                Ok(Some(ev))
+                originals.borrow_mut().insert(p.to_string(), t.clone());
+                Ok(Some(eval_file(p, &t)?))
             }
         }
     };
     let ex = import_expand(&root_eval, &entry, &mut import_read, opts.imports)?;
+    let originals = originals.into_inner();
 
     // 5. calc blocks
     let (fences, c, starts, ends) = calc_fences(&ex.text).map_err(|d| remap(&ex, d))?;
@@ -406,11 +461,22 @@ pub fn compile(entry: &str, read: Read<'_>, inputs: &Yaml, snapshot: &[SVal], fx
     // 6. calc references, block IDs (both keep the line structure)
     let calc_scope = Yaml::Map(vec![("calc".to_string(), Yaml::Map(calc_ns))]);
     let text2 = interpolate(&ex.text, &calc_scope, 1).map_err(|d| remap(&ex, d))?;
-    let text3 = strip_block_ids(&text2).map_err(|d| remap(&ex, d))?;
+    // Block IDs become <a id> anchors; references point at the rendered targets (spec 3.1, G57).
+    let (text3, block_anchors, heads) = xref::anchor_output(&text2).map_err(|d| remap(&ex, d))?;
+    let path_of = |line: usize| locate(&ex, line as u32 + 1).map(|(p, _)| p);
+    let refs_table = table.into_inner();
+    let mut lookup2 = |p: &str| -> Res<Option<String>> {
+        match originals.get(p) {
+            Some(t) => Ok(Some(t.clone())),
+            None => read_text(&mut **read_cell.borrow_mut(), p),
+        }
+    };
+    let text3 = xref::resolve_placeholders(&text3, &refs_table, &block_anchors, &heads, &path_of, &entry, &mut lookup2)?;
+    let reserved: Vec<String> = block_anchors.iter().map(|b| b.anchor.clone()).collect();
 
     // 7. export, then drop the calc blocks
     let markdown = if opts.markdown {
-        let out = export_markdown(&text3, opts.profile, &bibs, 1).map_err(|d| remap(&ex, d))?;
+        let out = export_markdown(&text3, opts.profile, &bibs, 1, &reserved).map_err(|d| remap(&ex, d))?;
         Some(if opts.keep_calc { out } else { remove_calc_blocks(&out)? })
     } else {
         None

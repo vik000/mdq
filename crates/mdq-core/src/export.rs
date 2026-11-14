@@ -9,7 +9,7 @@ use crate::diag::{Code, Diagnostic};
 use crate::imports::find_embeds;
 use crate::notes::{footnote_check, math_fallback};
 use crate::rich::{
-    callout_fallback, columns_fallback, details_fallback, generic_fallback, highlight_fallback, leaf_text, toc_build,
+    callout_fallback, columns_fallback, details_fallback, generic_fallback, highlight_fallback, leaf_text, toc_build_reserved,
 };
 use crate::vars::directives;
 
@@ -60,7 +60,7 @@ fn check_containers(kids: &[Container]) -> Res<()> {
     Ok(())
 }
 
-pub fn export_markdown(text: &str, profile: Profile, bibs: &[(Format, String)], first_line: u32) -> Res<String> {
+pub fn export_markdown(text: &str, profile: Profile, bibs: &[(Format, String)], first_line: u32, reserved: &[String]) -> Res<String> {
     if text.len() > MAX_INPUT {
         return Err(Diagnostic::new(Code::ResourceLimit, "input is larger than 16 MiB"));
     }
@@ -97,7 +97,7 @@ pub fn export_markdown(text: &str, profile: Profile, bibs: &[(Format, String)], 
     }
     citation_resolve(text, bibs, first_line)?;
     footnote_check(text, first_line)?;
-    toc_build(text, first_line)?;
+    toc_build_reserved(text, first_line, reserved)?;
     let mut t = details_fallback(text, first_line)?;
     t = columns_fallback(&t, first_line)?;
     t = generic_fallback(&t, first_line)?;
@@ -108,5 +108,5 @@ pub fn export_markdown(text: &str, profile: Profile, bibs: &[(Format, String)], 
         t = math_fallback(&t, first_line)?;
     }
     footnote_check(&t, first_line)?;
-    toc_build(&t, first_line)
+    toc_build_reserved(&t, first_line, reserved)
 }

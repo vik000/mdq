@@ -22,6 +22,25 @@ Per feature. Veto by editing or telling me. Test-plan gap rows (G-numbers) in `d
 **Open**
 - Per-member encryption layout (spec gap 4): strict xfail `test_per_member_encryption_layout`.
 
+## Fix: references, block anchors, duplicate IDs (G57; BUG-1, BUG-2, BUG-3 of G56)
+**Decisions**
+- BUG-1: `[[...]]` reference links are implemented as spec 3/3.1 defines them: `[[path.md]]`, `[[path.md#Heading]]`, `[[path.md#^id]]`, `|Label`; an empty path means the containing file. A target rendered in the output becomes `[Label](#anchor)` (its first rendered occurrence); default label = heading text, block ID or the path as written. Unknown heading/block: MDQ_UNRESOLVED_REFERENCE; missing file: MDQ_MISSING_IMPORT; never in code or HTML; `\[[` stays literal; `[[toc]]` keeps its meaning.
+- Block IDs appear as raw HTML anchors `<a id="p1"></a>` at the start of their block (after `# ` for headings), for every block ID; generated heading slugs never take a block ID's name (`a` becomes `a-2`), also in the TOC (BUG-3).
+- A target that is not in the compiled output links the referenced file: `[Setup](other.md#setup)` (path relative to the entry's directory, anchor = the 3.1 slug inside that file); the heading or block must still exist there, so the anchor is never broken.
+- BUG-2: every source document is checked for duplicate block IDs (MDQ_DUPLICATE_ID at the second one).
+- Two phases: references are resolved per source file (so errors point at the reference and targets use source identity), then rendered against the combined output (first rendered occurrence, output slugs). Placeholders made of private-use characters carry them through imports and the later passes.
+- References in headings are refused (they would change the heading's slug and the TOC).
+- The duplicate-ID check runs on the source with container fence lines blanked, so IDs inside `:::if`/`:::for` bodies are seen, including excluded branches (uniqueness is per source document).
+- Also fixed (G56 findings): unsupported `mdq`/`features` and reserved-namespace errors now name the declaring file.
+- Existing tests adjusted (assertions only): two E8.1a tests and two G56 fixtures expected markers simply removed; they now expect the `<a id>` anchors. The three BUG fixtures pass, their xfails are removed.
+
+**Sacrifices**
+- Heading anchors are implicit (3.1 slugs); a renderer that slugs differently (e.g. GitHub's `user-content-` prefix) will not match them. Block anchors are explicit HTML, so they always work.
+- Lines of reference errors after removed `:::if`/`:::for` branches can be off (same as other post-container errors).
+
+**Open**
+- The import-error line inside an INCLUDED `:::if` branch (G56 finding) is still off by the removed fence line; it is tied to G50 (keep fence lines as blank lines or not).
+
 ## Cross-cutting: rule ledger and conformance fixtures (G56)
 **Decisions**
 - Linking: each rule in `conformance/rules.yaml` lists the tests that cover it by pytest node ID and/or conformance fixture ID; a meta-test fails if a listed test or fixture does not exist, or a rule has neither. Existing test files stay untouched (new tests may also use `@pytest.mark.rule`).
@@ -30,7 +49,7 @@ Per feature. Veto by editing or telling me. Test-plan gap rows (G-numbers) in `d
 - Built with three parallel mapping passes (spec 1-7, 8-11, the other spec files); every cited test was read before being cited, every fixture was run before its expectation was recorded, and an expectation that would bless spec-violating behaviour was recorded as a BUG instead. 172 rules, 155 fixtures.
 - `xfail` tags: `G<n>`/`GAP-<n>` for spec gaps, `BUG-<n>` for known defects listed below (the schema allows exactly these).
 
-**Bugs found (strict xfail fixtures, to fix or decide)**
+**Bugs found (strict xfail fixtures) — all three fixed in G57**
 - BUG-1: `[[...]]` reference/wiki links stay literal in compile output (recorded as a choice in E8.1a), but spec §1, §3 and §3.1 require them to be rewritten to the compiled target or fail with MDQ_UNRESOLVED_REFERENCE (`See [[b.md#Nope]]` compiles silently). Needs your decision: implement reference links, or amend the spec.
 - BUG-2: duplicate block IDs in one source document are not detected by compile (`a ^p1` / `b ^p1` compiles); only `#^id` embeds index the target. Spec §3: IDs MUST be unique per source document.
 - BUG-3: generated heading anchors ignore user block IDs (`Para ^a` + `# A` gives a TOC link `#a`); spec §3.1 gives the block ID priority (generated one should become `a-2`). `slug_dedupe` already takes reserved names; `toc_build`/compile do not pass them.

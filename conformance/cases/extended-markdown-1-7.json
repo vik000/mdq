@@ -39,7 +39,7 @@
   },
   "entry": "main.md",
   "expect": {
-   "output": "# Title\n\nPara\n"
+   "output": "# <a id=\"top\"></a>Title\n\n<a id=\"p1\"></a>Para\n"
   }
  },
  {
@@ -56,8 +56,7 @@
   "entry": "main.md",
   "expect": {
    "output": "# X\n\nSee [the X](#x).\n"
-  },
-  "xfail": "BUG-1: wiki/reference links [[x]] stay literal in compile output (a recorded E8.1 choice) but spec §1/§3 require rewriting or MDQ_UNRESOLVED_REFERENCE"
+  }
  },
  {
   "id": "a-core-unknown-feature-fails",
@@ -234,8 +233,7 @@
      "line": 3
     }
    ]
-  },
-  "xfail": "BUG-2: compile strips block-ID markers without checking duplicates (only #^id embeds check them); spec §3 requires unique IDs"
+  }
  },
  {
   "id": "a-comp-block-id-duplicate-target",
@@ -341,8 +339,7 @@
      "line": 1
     }
    ]
-  },
-  "xfail": "BUG-1: wiki/reference links [[x]] stay literal; a link to a missing heading must fail (spec §3.1)"
+  }
  },
  {
   "id": "a-anch-combined-duplicate-headings",
@@ -385,9 +382,8 @@
   },
   "entry": "main.md",
   "expect": {
-   "output": "Para\n\n# A\n\n- [A](#a-2)\n"
-  },
-  "xfail": "BUG-3: generated heading anchors ignore user block IDs, so a TOC anchor can equal a block ID; spec §3.1 gives the block ID priority"
+   "output": "<a id=\"a\"></a>Para\n\n# A\n\n- [A](#a-2)\n"
+  }
  },
  {
   "id": "a-anch-import-asset-rebased",

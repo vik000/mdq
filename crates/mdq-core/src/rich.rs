@@ -300,10 +300,15 @@ pub fn generic_fallback(text: &str, first_line: u32) -> Res<String> {
 /// Replace every paragraph that is exactly `[[toc]]` at column 1 by a nested list of links to the
 /// headings of `text` (G40 in docs/TEST_PLAN.md). Slugs follow G33.
 pub fn toc_build(text: &str, first_line: u32) -> Res<String> {
+    toc_build_reserved(text, first_line, &[])
+}
+
+/// `toc_build` where generated slugs never take a `reserved` name (block anchors, spec 3.1).
+pub fn toc_build_reserved(text: &str, first_line: u32, reserved: &[String]) -> Res<String> {
     use crate::headings::{percent_encode_anchor, slug_dedupe, slugify};
     check(text)?;
     let heads = crate::refs::build(text, first_line)?.headings;
-    let slugs = slug_dedupe(&heads.iter().map(|h| slugify(&h.text)).collect::<Vec<_>>(), &[]);
+    let slugs = slug_dedupe(&heads.iter().map(|h| slugify(&h.text)).collect::<Vec<_>>(), reserved);
     let mut lines: Vec<String> = Vec::new();
     let mut stack: Vec<usize> = Vec::new();
     for (h, sl) in heads.iter().zip(&slugs) {

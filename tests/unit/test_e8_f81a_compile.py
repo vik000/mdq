@@ -82,7 +82,8 @@ def test_sources_are_never_modified(tmp_path):
     before = {p.name: (hashlib.sha256(p.read_bytes()).hexdigest(), p.stat().st_mtime_ns) for p in tmp_path.iterdir()}
     out = mdq.compile("a.md", mdq.DirectoryFS(tmp_path))
     after = {p.name: (hashlib.sha256(p.read_bytes()).hexdigest(), p.stat().st_mtime_ns) for p in tmp_path.iterdir()}
-    assert before == after and out.markdown == "# x\n\n2\n"
+    # (block IDs become <a id> anchors since G57)
+    assert before == after and out.markdown == "# <a id=\"id\"></a>x\n\n2\n"
 
 
 # ---------------------------------------------------------------- metadata cascade
@@ -305,8 +306,10 @@ def test_import_errors_carry_the_imported_path(assert_mdq_error):
 
 
 def test_block_ids_are_removed():
+    # The ^id markers are removed; since G57 each block keeps an <a id> anchor at its start (spec 3.1).
     files = {"d.md": "# Title ^top\n\nPara one ^p1\n\nline\n^p2\n\n![[o.md#^q]]\n", "o.md": "Quoted ^q\n"}
-    assert md("d.md", files) == "# Title\n\nPara one\n\nline\n\n\nQuoted\n"
+    assert md("d.md", files) == ('# <a id="top"></a>Title\n\n<a id="p1"></a>Para one\n\n<a id="p2"></a>line\n\n\n'
+                                 '<a id="q"></a>Quoted\n')
 
 
 # ---------------------------------------------------------------- export

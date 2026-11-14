@@ -81,6 +81,16 @@ pub(crate) struct Index {
 }
 
 pub(crate) fn build(text: &str, first_line: u32) -> Res<Index> {
+    build_with(text, first_line, true)
+}
+
+/// `build` without the duplicate-ID check: for combined output, where IDs from different source
+/// documents may repeat (uniqueness is per source document, spec 3).
+pub(crate) fn build_lenient(text: &str) -> Res<Index> {
+    build_with(text, 1, false)
+}
+
+fn build_with(text: &str, first_line: u32, check_dups: bool) -> Res<Index> {
     if text.len() > MAX_INPUT {
         return Err(Diagnostic::new(Code::ResourceLimit, "input is larger than 16 MiB"));
     }
@@ -113,7 +123,7 @@ pub(crate) fn build(text: &str, first_line: u32) -> Res<Index> {
             let off = seg_start + cut;
             let li = starts.partition_point(|&s| s <= off) - 1;
             let line = first_line + li as u32;
-            if let Some((_, first)) = seen.iter().find(|(s, _)| *s == id) {
+            if let Some((_, first)) = seen.iter().find(|(s, _)| *s == id).filter(|_| check_dups) {
                 return Err(Diagnostic::new(
                     Code::DuplicateId,
                     format!("duplicate block id ^{} (first at line {})", id, first),
@@ -230,15 +240,23 @@ pub(crate) fn heading_level(c: &[char], starts: &[usize], ends: &[usize], a: usi
     }
 }
 
-/// Remove every block-ID marker (`^id`) from the text, as compiled output requires (spec section 2).
-/// Line structure is kept: a marker alone on the last line of a paragraph leaves an empty line.
-/// Duplicate IDs are NOT checked here (after imports, IDs from different files may repeat).
-pub fn strip_block_ids(text: &str) -> Res<String> {
+/// One block-ID marker in a text: the ID, the index of its leaf in `blocks::parse` order, and the
+/// char range to delete (the marker and the blanks before it, never past its segment's start).
+#[derive(Debug, Clone)]
+pub(crate) struct Marker {
+    pub(crate) id: String,
+    pub(crate) leaf: usize,
+    pub(crate) cut_start: usize,
+    pub(crate) cut_end: usize,
+}
+
+/// Every block-ID marker, in document order. Duplicates are not checked here.
+pub(crate) fn block_markers(text: &str) -> Res<Vec<Marker>> {
     let c: Vec<char> = text.chars().collect();
     let (starts, ends) = line_bounds(&c);
     let leaves = parse(&c, &starts, &ends, 1)?;
-    let mut cuts: Vec<(usize, usize)> = Vec::new(); // char ranges to delete
-    for leaf in &leaves {
+    let mut out = Vec::new();
+    for (k, leaf) in leaves.iter().enumerate() {
         let heading = match leaf.kind {
             Kind::Heading => true,
             Kind::Paragraph => false,
@@ -257,19 +275,25 @@ pub fn strip_block_ids(text: &str) -> Res<String> {
             let seg_start = leaf.segments.last().map(|x| x.0).unwrap_or(0);
             let caret = seg_start + cut;
             let end = caret + 1 + id.chars().count();
-            // Also remove the blanks before the marker, but never past the start of the segment.
             let mut start = caret;
             while start > seg_start && matches!(c[start - 1], ' ' | '\t') {
                 start -= 1;
             }
-            cuts.push((start, end));
+            out.push(Marker { id, leaf: k, cut_start: start, cut_end: end });
         }
     }
+    Ok(out)
+}
+
+/// Remove every block-ID marker (`^id`) from the text (spec section 2). Line structure is kept:
+/// a marker alone on the last line of a paragraph leaves an empty line.
+pub fn strip_block_ids(text: &str) -> Res<String> {
+    let c: Vec<char> = text.chars().collect();
     let mut out = String::with_capacity(text.len());
     let mut pos = 0;
-    for (a, b) in cuts {
-        out.extend(c[pos..a].iter());
-        pos = b;
+    for m in block_markers(text)? {
+        out.extend(c[pos..m.cut_start].iter());
+        pos = m.cut_end;
     }
     out.extend(c[pos..].iter());
     Ok(out)

@@ -35,5 +35,6 @@ pub mod units;
 pub mod utf8;
 pub mod vars;
 pub mod version;
+pub mod xref;
 pub mod yaml;
 pub mod zip;

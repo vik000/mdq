@@ -867,7 +867,7 @@ fn export_markdown(
     for (f, t) in bibs.unwrap_or_default() {
         v.push((parse_format(&f)?, t));
     }
-    wrap(py, export::export_markdown(text, profile, &v, first_line))
+    wrap(py, export::export_markdown(text, profile, &v, first_line, &[]))
 }
 
 fn source_dict<'py>(py: Python<'py>, s: source::Source) -> PyResult<Bound<'py, PyDict>> {
